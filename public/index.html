@@ -1,0 +1,1629 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>splitflap.org - Open Source Retro Display</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@300;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+      integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ['"Roboto Mono"', "monospace"],
+            },
+            colors: { brand: { bg: "#fcfcfc" } },
+          },
+        },
+      };
+    </script>
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background-color: #fcfcfc;
+        overflow-x: hidden;
+        color: #171717;
+      }
+      .reveal {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .reveal.active {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .reveal-delay-1 {
+        transition-delay: 100ms;
+      }
+      .reveal-delay-2 {
+        transition-delay: 200ms;
+      }
+      .rocker-switch * {
+        box-sizing: border-box;
+      }
+      .rocker-switch {
+        position: relative;
+        will-change: transform;
+      }
+      .bezel,
+      .bezel-highlight,
+      .recessed-hole-stroke,
+      .recessed-hole-bg,
+      .rocker-wrapper-top,
+      .rocker-wrapper-bot,
+      .rocker-wrapper-falling,
+      .rocker-split-overlay,
+      .ridges {
+        position: absolute;
+      }
+      .bezel-highlight {
+        pointer-events: none;
+      }
+      .rocker-top,
+      .rocker-bot,
+      .ridge {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .rocker-top,
+      .rocker-bot {
+        height: 100%;
+      }
+      .ridges {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .rocker-scale-wrapper {
+        contain: layout style paint;
+      }
+      .rocker-wrapper-falling {
+        will-change: transform, opacity;
+      }
+      .rocker-switch {
+        width: 250px;
+        height: 540px;
+        border-radius: 30px;
+        background-color: #0f0f0f;
+        transform-style: preserve-3d;
+      }
+      .bezel {
+        left: 10px;
+        top: 3px;
+        width: 230px;
+        height: 530px;
+        border-radius: 30px;
+        background: linear-gradient(to bottom, #000, #000);
+      }
+      .bezel-highlight {
+        inset: 0;
+        border: 0 solid rgba(255, 255, 255, 0.05);
+        border-radius: 30px;
+      }
+      .recessed-hole-stroke {
+        left: 24px;
+        top: 19px;
+        width: 202px;
+        height: 502px;
+        background-color: #000;
+        -webkit-clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 255px,
+          202px 262px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 262px,
+          14px 255px,
+          14px 140px,
+          0px 133px
+        );
+        clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 255px,
+          202px 262px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 262px,
+          14px 255px,
+          14px 140px,
+          0px 133px
+        );
+      }
+      .recessed-hole-bg {
+        left: 0;
+        top: 0;
+        width: 202px;
+        height: 502px;
+        background-color: #040404;
+        -webkit-clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 255px,
+          202px 262px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 262px,
+          14px 255px,
+          14px 140px,
+          0px 133px
+        );
+        clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 255px,
+          202px 262px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 262px,
+          14px 255px,
+          14px 140px,
+          0px 133px
+        );
+      }
+      .rocker-wrapper-top {
+        left: 0;
+        top: 0;
+        width: 202px;
+        height: 194px;
+        overflow: hidden;
+      }
+      .rocker-top {
+        background: linear-gradient(to bottom, #0f0f0f, #0f0f0f);
+        -webkit-clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 194px,
+          14px 194px,
+          14px 140px,
+          0px 133px
+        );
+        clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 194px,
+          14px 194px,
+          14px 140px,
+          0px 133px
+        );
+        transition: background 60ms;
+      }
+      .rocker-wrapper-bot {
+        left: 0;
+        top: 201px;
+        width: 202px;
+        height: 301px;
+        overflow: hidden;
+      }
+      .rocker-bot {
+        background: linear-gradient(
+          to bottom,
+          #0f0f0f 0%,
+          #0f0f0f 60%,
+          #0f0f0f 100%
+        );
+        -webkit-clip-path: polygon(
+          14px 0px,
+          188px 0px,
+          188px 54px,
+          202px 61px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 61px,
+          14px 54px
+        );
+        clip-path: polygon(
+          14px 0px,
+          188px 0px,
+          188px 54px,
+          202px 61px,
+          202px 478px,
+          200.8px 486.4px,
+          196px 496px,
+          186.4px 500.8px,
+          178px 502px,
+          24px 502px,
+          15.6px 500.8px,
+          6px 496px,
+          1.2px 486.4px,
+          0px 478px,
+          0px 61px,
+          14px 54px
+        );
+        transition: background 60ms;
+      }
+      .rocker-wrapper-falling {
+        left: 0;
+        top: 0;
+        width: 202px;
+        height: 194px;
+        transform-origin: bottom center;
+        z-index: 5;
+        transform-style: preserve-3d;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .rocker-falling-front {
+        position: absolute;
+        inset: 0;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        -webkit-clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 194px,
+          14px 194px,
+          14px 140px,
+          0px 133px
+        );
+        clip-path: polygon(
+          0px 24px,
+          1.2px 15.6px,
+          6px 6px,
+          15.6px 1.2px,
+          24px 0px,
+          178px 0px,
+          186.4px 1.2px,
+          196px 6px,
+          200.8px 15.6px,
+          202px 24px,
+          202px 133px,
+          188px 140px,
+          188px 194px,
+          14px 194px,
+          14px 140px,
+          0px 133px
+        );
+        overflow: hidden;
+      }
+      .rocker-split-overlay {
+        position: absolute;
+        left: 0;
+        width: 202px;
+        top: 194px;
+        height: 7px;
+        background-color: #040404;
+        z-index: 20;
+        pointer-events: none;
+        box-shadow:
+          0 -1px 2px rgba(0, 0, 0, 0.9),
+          0 1px 2px rgba(0, 0, 0, 0.9);
+      }
+      .ridges {
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 55px;
+      }
+      .ridge {
+        height: 7px;
+        margin-bottom: 1px;
+        border-radius: 20px;
+        background: linear-gradient(
+          to bottom,
+          #00000000 0%,
+          #00000005 20%,
+          #00000066 70%,
+          #000000e6 100%
+        );
+        border-top: none;
+      }
+      .vestaboard-grid {
+        --anim-duration: 360ms;
+        --anim-persp: 3000px;
+        --anim-ease: ease-in-out;
+        display: grid;
+        grid-template-columns: repeat(22, auto);
+        gap: 11px;
+        padding: 13px;
+        background-color: #0f0f0f;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+        border-radius: 6px;
+      }
+      .rocker-scale-wrapper {
+        perspective: var(--anim-persp);
+        width: calc(250px * 0.22);
+        height: calc(540px * 0.22);
+        position: relative;
+      }
+      .rocker-switch {
+        transform: scale(0.22);
+        transform-origin: top left;
+      }
+      .rocker-text {
+        position: absolute;
+        width: 202px;
+        height: 502px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+        z-index: 10;
+        pointer-events: none;
+        font-family: "Roboto Mono", monospace;
+        font-size: 247px;
+        font-weight: 300;
+        color: #fff;
+        transform: translate(0px, -52px);
+        line-height: 1;
+        text-align: center;
+        transition: opacity 80ms;
+      }
+      .rocker-text-top {
+        top: 0;
+        left: 0;
+      }
+      .rocker-text-bot {
+        top: -201px;
+        left: 0;
+      }
+      #board-container {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        overflow: hidden;
+        padding: 0 10px;
+      }
+      @media (max-width: 480px) {
+        #vestaboard-wrapper {
+          transform: scale(0.24);
+          transform-origin: top center;
+        }
+        #board-container {
+          height: 160px;
+        }
+      }
+      @media (min-width: 481px) and (max-width: 640px) {
+        #vestaboard-wrapper {
+          transform: scale(0.35);
+          transform-origin: top center;
+        }
+        #board-container {
+          height: 250px;
+        }
+      }
+      @media (min-width: 641px) and (max-width: 1024px) {
+        #vestaboard-wrapper {
+          transform: scale(0.65);
+          transform-origin: top center;
+        }
+        #board-container {
+          height: 420px;
+        }
+      }
+      @media (min-width: 1025px) {
+        #vestaboard-wrapper {
+          transform: scale(0.9);
+          transform-origin: top center;
+        }
+        #board-container {
+          height: 600px;
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="antialiased flex flex-col min-h-screen selection:bg-gray-900 selection:text-white"
+  >
+    <!-- NAVBAR -->
+    <nav
+      class="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center w-full relative z-20 reveal"
+    >
+      <div class="flex items-center cursor-pointer">
+        <h1 class="font-bold text-xl tracking-tight text-gray-900">
+          splitflap.org
+        </h1>
+      </div>
+      <div
+        class="flex items-center space-x-6 md:space-x-8 text-sm font-medium text-gray-500"
+      >
+        <a
+          href="#how-it-works"
+          class="hidden md:block hover:text-gray-900 transition-colors"
+          >How it works</a
+        >
+        <a
+          href="#features"
+          class="hidden sm:block hover:text-gray-900 transition-colors"
+          >Features</a
+        >
+        <a
+          href="https://github.com/MohdYahyaMahmodi/splitflap.org"
+          target="_blank"
+          class="hidden sm:flex items-center gap-1.5 hover:text-gray-900 transition-colors"
+          ><i class="fa-brands fa-github text-base"></i> GitHub</a
+        >
+        <button
+          id="audio-toggle"
+          onclick="toggleAudio()"
+          class="hover:text-gray-900 transition-colors focus:outline-none flex items-center gap-2"
+          title="Toggle Audio"
+        >
+          <i class="fa-solid fa-volume-xmark text-lg" id="volume-icon"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <main
+      class="flex flex-col items-center mt-12 md:mt-20 px-4 w-full pb-16 relative"
+    >
+      <h2
+        class="text-[2.5rem] sm:text-[3.5rem] md:text-[4.5rem] font-bold tracking-tight text-center leading-[1.05] max-w-4xl text-gray-900 reveal"
+      >
+        Turn any screen into a retro split-flap display.
+      </h2>
+      <p
+        class="mt-6 text-lg md:text-xl text-gray-500 text-center max-w-2xl px-2 leading-relaxed reveal reveal-delay-1"
+      >
+        The classic mechanical aesthetic, without the $3,500 price tag. Scan a
+        QR code to pair your phone, and control it all wirelessly.
+      </p>
+      <div
+        class="mt-10 flex flex-col items-center gap-4 w-full relative z-20 reveal reveal-delay-2"
+      >
+        <div
+          class="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg px-4"
+        >
+          <a
+            href="board.html"
+            class="w-full sm:w-1/2 px-8 py-4 bg-gray-900 hover:bg-black text-white font-medium rounded-xl transition-all active:scale-95 text-center flex items-center justify-center gap-2 shadow-sm"
+          >
+            <i class="fa-solid fa-tv text-base"></i> Create Board
+          </a>
+          <a
+            href="companion.html"
+            class="w-full sm:w-1/2 px-8 py-4 bg-white border border-gray-200 hover:border-gray-300 text-gray-900 font-medium rounded-xl transition-all active:scale-95 text-center flex items-center justify-center gap-2 shadow-sm"
+          >
+            <i class="fa-solid fa-mobile-screen text-base"></i> Connect Phone
+          </a>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-medium">
+          Developers:
+          <a
+            href="https://github.com/MohdYahyaMahmodi/splitflap.org"
+            target="_blank"
+            class="text-gray-500 hover:text-gray-900 transition-colors underline decoration-gray-300 underline-offset-4"
+            >Self-host via Node.js</a
+          >
+        </p>
+      </div>
+
+      <!-- THE BOARD -->
+      <div
+        id="board-container"
+        class="mt-16 md:mt-24 w-full relative z-10 reveal reveal-delay-2"
+      >
+        <div
+          id="vestaboard-wrapper"
+          class="inline-block relative mx-auto cursor-pointer transition-transform active:scale-[0.98] duration-150"
+          title="Click to skip to next sequence"
+          onclick="skipSequence()"
+        ></div>
+      </div>
+      <div
+        class="mt-8 text-xs font-mono text-gray-400 flex flex-wrap justify-center items-center gap-4 px-4 reveal reveal-delay-2"
+      >
+        <span class="flex items-center gap-1.5"
+          ><i class="fa-solid fa-hand-pointer text-xs"></i> click to skip</span
+        >
+        <span class="flex items-center gap-1.5"
+          ><kbd
+            class="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 shadow-sm"
+            >M</kbd
+          >
+          mute</span
+        >
+        <span class="flex items-center gap-1.5"
+          ><kbd
+            class="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 shadow-sm"
+            >F</kbd
+          >
+          fullscreen</span
+        >
+      </div>
+    </main>
+
+    <!-- HOW IT WORKS -->
+    <section
+      id="how-it-works"
+      class="py-24 bg-white w-full border-t border-gray-100"
+    >
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="mb-16 md:text-center flex flex-col md:items-center reveal">
+          <h3
+            class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
+          >
+            How it works
+          </h3>
+          <p class="text-lg text-gray-500 max-w-xl">
+            No accounts. No downloads. Secure pairing in seconds.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div
+            class="p-8 border border-gray-200 rounded-2xl bg-white flex flex-col items-start reveal reveal-delay-1"
+          >
+            <div
+              class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-emerald-50 text-emerald-600 border border-emerald-100/50"
+            >
+              <i class="fa-solid fa-tv text-xl"></i>
+            </div>
+            <h4 class="text-xl font-semibold text-gray-900 mb-2">
+              1. Create a Board
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Open board.html on your smart TV, iPad, or any screen. A QR code
+              and 6-digit code appear instantly.
+            </p>
+          </div>
+          <div
+            class="p-8 border border-gray-200 rounded-2xl bg-white flex flex-col items-start reveal reveal-delay-2"
+          >
+            <div
+              class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-amber-50 text-amber-600 border border-amber-100/50"
+            >
+              <i class="fa-solid fa-qrcode text-xl"></i>
+            </div>
+            <h4 class="text-xl font-semibold text-gray-900 mb-2">
+              2. Scan or Type
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Scan the QR code for instant pairing with an embedded secret. Or
+              type the 6-digit code and the TV will ask you to approve.
+            </p>
+          </div>
+          <div
+            class="p-8 border border-gray-200 rounded-2xl bg-white flex flex-col items-start reveal reveal-delay-1"
+          >
+            <div
+              class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-rose-50 text-rose-600 border border-rose-100/50"
+            >
+              <i class="fa-solid fa-lock text-xl"></i>
+            </div>
+            <h4 class="text-xl font-semibold text-gray-900 mb-2">
+              3. Auto-locked
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Once paired, the board locks. No one else can connect. Your phone
+              is the wireless remote. Disconnect to unlock.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section
+      id="features"
+      class="py-24 bg-white w-full border-t border-gray-100"
+    >
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="mb-16 md:text-center flex flex-col md:items-center reveal">
+          <h3
+            class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
+          >
+            Everything you need.
+          </h3>
+          <p class="text-lg text-gray-500 max-w-xl">
+            A physically accurate display with a full companion app on your
+            phone.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Phone remote (wide) -->
+          <div
+            class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-[2rem] p-10 md:p-12 flex flex-col justify-between reveal reveal-delay-1"
+          >
+            <div>
+              <div
+                class="w-12 h-12 bg-white border border-gray-200 text-gray-900 rounded-xl flex items-center justify-center mb-6 shadow-sm"
+              >
+                <i class="fa-solid fa-sliders text-xl"></i>
+              </div>
+              <h4 class="text-2xl font-bold mb-3 text-gray-900">
+                Your Phone is the Remote
+              </h4>
+              <p class="text-gray-500 leading-relaxed max-w-md text-base">
+                Add messages with the + button, see a real-time mini board
+                preview with character counts per row, change themes, adjust
+                animation speed, and switch between message and clock modes.
+              </p>
+            </div>
+          </div>
+          <!-- QR pairing -->
+          <div
+            class="bg-gray-900 text-white rounded-[2rem] p-10 flex flex-col reveal reveal-delay-2"
+          >
+            <div
+              class="w-12 h-12 bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-center mb-6"
+            >
+              <i class="fa-solid fa-qrcode text-gray-300 text-xl"></i>
+            </div>
+            <h4 class="text-xl font-bold mb-3">QR Code Pairing</h4>
+            <p class="text-gray-400 leading-relaxed text-sm">
+              Scan the QR on your TV to pair instantly. A 32-character secret is
+              embedded in the URL, too long to read from across the room.
+            </p>
+          </div>
+          <!-- Sound -->
+          <div
+            class="bg-white border border-gray-200 rounded-[2rem] p-10 reveal reveal-delay-1"
+          >
+            <div
+              class="w-12 h-12 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl flex items-center justify-center mb-6"
+            >
+              <i class="fa-solid fa-volume-high text-xl"></i>
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">
+              Authentic Sound
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Real mechanical flap sounds via the Web Audio API. Control volume
+              and pitch from your phone. Falls back to synthesized clicks if no
+              audio file.
+            </p>
+          </div>
+          <!-- Clock mode -->
+          <div
+            class="bg-white border border-gray-200 rounded-[2rem] p-10 reveal reveal-delay-2"
+          >
+            <div
+              class="w-12 h-12 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl flex items-center justify-center mb-6"
+            >
+              <i class="fa-regular fa-clock text-xl"></i>
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">
+              Live Clock Mode
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Toggle clock mode from the companion. The board flips to show the
+              current time, day, date, and year, updating every second.
+            </p>
+          </div>
+          <!-- Security -->
+          <div
+            class="bg-white border border-gray-200 rounded-[2rem] p-10 reveal reveal-delay-1"
+          >
+            <div
+              class="w-12 h-12 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl flex items-center justify-center mb-6"
+            >
+              <i class="fa-solid fa-shield-halved text-xl"></i>
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">
+              Secure by Default
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              QR embeds a long secret. Manual codes require TV-side approval.
+              Board auto-locks after pairing. No one can hijack your display.
+            </p>
+          </div>
+          <!-- Customization -->
+          <div
+            class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-[2rem] p-10 md:p-12 flex flex-col reveal reveal-delay-2"
+          >
+            <div>
+              <div
+                class="w-12 h-12 bg-white border border-gray-200 text-gray-900 rounded-xl flex items-center justify-center mb-6 shadow-sm"
+              >
+                <i class="fa-solid fa-palette text-xl"></i>
+              </div>
+              <h4 class="text-2xl font-bold mb-3 text-gray-900">
+                Deep Customization
+              </h4>
+              <p class="text-gray-500 leading-relaxed max-w-lg text-base">
+                Every parameter is adjustable from the companion: flap shape,
+                bezel radius, pinch depth, ridges, typography, grid gap, board
+                shadow, color gradients for top/bottom flaps, and 7 color
+                emojis. Use the standalone custom-board.html to design and
+                export CSS.
+              </p>
+            </div>
+          </div>
+          <!-- Open source -->
+          <div
+            class="bg-white border border-gray-200 rounded-[2rem] p-10 reveal reveal-delay-1"
+          >
+            <div
+              class="w-12 h-12 bg-gray-100 text-gray-600 border border-gray-200 rounded-xl flex items-center justify-center mb-6"
+            >
+              <i class="fa-brands fa-github text-xl"></i>
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">Open Source</h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              MIT licensed. Self-host with
+              <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded"
+                >npm install express ws helmet express-rate-limit</code
+              >
+              and
+              <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded"
+                >node server.js</code
+              >.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTEGRATIONS -->
+    <section
+      id="integrations"
+      class="py-24 bg-white w-full border-t border-gray-100"
+    >
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="mb-16 md:text-center flex flex-col md:items-center reveal">
+          <h3
+            class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
+          >
+            Your board. Live.
+          </h3>
+          <p class="text-lg text-gray-500 max-w-xl">
+            Real-time data on your display. Toggle between modes from the
+            companion.
+          </p>
+        </div>
+        <div class="flex items-center gap-2.5 mb-6 pl-1 reveal">
+          <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+          <h4 class="text-xs font-bold uppercase tracking-widest text-gray-500">
+            Available Now
+          </h4>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-20">
+          <div
+            class="p-8 bg-white border border-gray-200 rounded-2xl reveal reveal-delay-1"
+          >
+            <div class="flex justify-between items-start mb-6">
+              <div
+                class="w-12 h-12 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center"
+              >
+                <i class="fa-regular fa-clock text-xl"></i>
+              </div>
+              <span
+                class="text-gray-400 text-xs font-mono border border-gray-200 px-2 py-1 rounded"
+                >WIDGET</span
+              >
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">Clock & Date</h4>
+            <p class="text-gray-500 text-sm leading-relaxed">
+              Live 12-hour time with seconds, day of week, month/date, and year.
+              Centered and auto-formatted to your grid size. Flips every second.
+            </p>
+          </div>
+          <div
+            class="p-8 bg-white border border-gray-200 rounded-2xl reveal reveal-delay-2"
+          >
+            <div class="flex justify-between items-start mb-6">
+              <div
+                class="w-12 h-12 bg-violet-50 text-violet-600 border border-violet-100 rounded-xl flex items-center justify-center"
+              >
+                <i class="fa-solid fa-arrows-rotate text-xl"></i>
+              </div>
+              <span
+                class="text-gray-400 text-xs font-mono border border-gray-200 px-2 py-1 rounded"
+                >MODE</span
+              >
+            </div>
+            <h4 class="text-xl font-bold text-gray-900 mb-3">Message Loop</h4>
+            <p class="text-gray-500 text-sm leading-relaxed">
+              Add multiple messages with the + button. Loop them automatically
+              with configurable delay, or step through manually with Next.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2.5 mb-6 pl-1 reveal">
+          <div class="w-2 h-2 bg-gray-300 rounded-full"></div>
+          <h4 class="text-xs font-bold uppercase tracking-widest text-gray-400">
+            Coming Soon
+          </h4>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            class="p-5 rounded-xl border border-gray-200 bg-white flex gap-4 items-center reveal reveal-delay-1"
+          >
+            <div
+              class="w-10 h-10 shrink-0 bg-gray-50 text-gray-500 border border-gray-200 rounded-lg flex items-center justify-center"
+            >
+              <i class="fa-solid fa-plug text-base"></i>
+            </div>
+            <div>
+              <h5 class="text-sm font-semibold text-gray-900">Custom API</h5>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Point at any JSON endpoint.
+              </p>
+            </div>
+          </div>
+          <div
+            class="p-5 rounded-xl border border-gray-200 bg-white flex gap-4 items-center reveal reveal-delay-1"
+          >
+            <div
+              class="w-10 h-10 shrink-0 bg-gray-50 text-gray-500 border border-gray-200 rounded-lg flex items-center justify-center"
+            >
+              <i class="fa-solid fa-cloud text-base"></i>
+            </div>
+            <div>
+              <h5 class="text-sm font-semibold text-gray-900">
+                Weather Forecast
+              </h5>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Real-time local conditions.
+              </p>
+            </div>
+          </div>
+          <div
+            class="p-5 rounded-xl border border-gray-200 bg-white flex gap-4 items-center reveal reveal-delay-2"
+          >
+            <div
+              class="w-10 h-10 shrink-0 bg-gray-50 text-gray-500 border border-gray-200 rounded-lg flex items-center justify-center"
+            >
+              <i class="fa-solid fa-hourglass-half text-base"></i>
+            </div>
+            <div>
+              <h5 class="text-sm font-semibold text-gray-900">
+                Countdown Timer
+              </h5>
+              <p class="text-xs text-gray-500 mt-0.5">Days, hours, minutes.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="py-24 bg-gray-50 w-full border-t border-gray-100">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="mb-16 md:text-center flex flex-col md:items-center reveal">
+          <h3
+            class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
+          >
+            Safe in public spaces.
+          </h3>
+          <p class="text-lg text-gray-500 max-w-xl">
+            Three layers of protection so nobody hijacks your display in a
+            crowded room.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div
+            class="p-8 bg-white border border-gray-200 rounded-2xl reveal reveal-delay-1"
+          >
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center mb-5 bg-emerald-50 text-emerald-600 border border-emerald-100/50 text-lg font-bold font-mono"
+            >
+              1
+            </div>
+            <h4 class="text-lg font-semibold text-gray-900 mb-2">QR Secret</h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              QR code embeds a 32-character cryptographic token in the URL.
+              Impossible to read from across the room. Scan it and you're
+              instantly paired.
+            </p>
+          </div>
+          <div
+            class="p-8 bg-white border border-gray-200 rounded-2xl reveal reveal-delay-2"
+          >
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center mb-5 bg-amber-50 text-amber-600 border border-amber-100/50 text-lg font-bold font-mono"
+            >
+              2
+            </div>
+            <h4 class="text-lg font-semibold text-gray-900 mb-2">
+              Approval Gate
+            </h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              If someone types the 6-digit code manually, the TV shows "Approve
+              connection?" and waits for you to press Enter or click Accept.
+            </p>
+          </div>
+          <div
+            class="p-8 bg-white border border-gray-200 rounded-2xl reveal reveal-delay-1"
+          >
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center mb-5 bg-rose-50 text-rose-600 border border-rose-100/50 text-lg font-bold font-mono"
+            >
+              3
+            </div>
+            <h4 class="text-lg font-semibold text-gray-900 mb-2">Auto-Lock</h4>
+            <p class="text-gray-500 leading-relaxed text-sm">
+              Once paired, the board locks completely. All pairing info
+              disappears. No one else can connect. Disconnect from the companion
+              to unlock.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRE-FOOTER CTA -->
+    <section class="py-24 bg-white border-t border-gray-200">
+      <div class="max-w-3xl mx-auto px-6 text-center reveal">
+        <h2 class="text-3xl font-bold text-gray-900 mb-4">
+          Ready to start flipping?
+        </h2>
+        <p class="text-base text-gray-500 mb-8">
+          No hardware to buy, no software to install. Launch a board in your
+          browser right now.
+        </p>
+        <a
+          href="board.html"
+          class="inline-flex px-8 py-3.5 bg-gray-900 hover:bg-black text-white font-medium rounded-xl transition-transform active:scale-95 items-center justify-center gap-2 mx-auto"
+          >Launch Display</a
+        >
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="bg-white pt-16 pb-8 w-full border-t border-gray-200">
+      <div class="max-w-7xl mx-auto px-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-16">
+          <div class="md:col-span-1">
+            <div class="flex items-center mb-4">
+              <h1 class="font-bold text-lg tracking-tight text-gray-900">
+                splitflap.org
+              </h1>
+            </div>
+            <p class="text-sm text-gray-500 mb-6">
+              Open sourced with love for the developer community. A physically
+              accurate display that belongs to everyone.
+            </p>
+            <div class="flex items-center gap-3">
+              <a
+                href="https://github.com/MohdYahyaMahmodi/splitflap.org"
+                target="_blank"
+                class="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                ><i class="fa-brands fa-github"></i
+              ></a>
+              <a
+                href="#"
+                class="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                ><i class="fa-brands fa-x-twitter"></i
+              ></a>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-gray-900 font-semibold mb-4 text-sm">Product</h4>
+            <ul class="space-y-3 text-sm text-gray-500">
+              <li>
+                <a
+                  href="board.html"
+                  class="hover:text-gray-900 transition-colors"
+                  >Create a Board</a
+                >
+              </li>
+              <li>
+                <a
+                  href="companion.html"
+                  class="hover:text-gray-900 transition-colors"
+                  >Connect Phone</a
+                >
+              </li>
+              <li>
+                <a
+                  href="custom-board.html"
+                  class="hover:text-gray-900 transition-colors"
+                  >Design Studio</a
+                >
+              </li>
+              <li>
+                <a
+                  href="#features"
+                  class="hover:text-gray-900 transition-colors"
+                  >Features</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="text-gray-900 font-semibold mb-4 text-sm">Developers</h4>
+            <ul class="space-y-3 text-sm text-gray-500">
+              <li>
+                <a
+                  href="https://github.com/MohdYahyaMahmodi/splitflap.org"
+                  target="_blank"
+                  class="hover:text-gray-900 transition-colors"
+                  >GitHub Repo</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/MohdYahyaMahmodi/splitflap.org/blob/main/documentation.md"
+                  class="hover:text-gray-900 transition-colors"
+                  >Documentation</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/MohdYahyaMahmodi/splitflap.org/blob/main/self-hosting.md"
+                  class="hover:text-gray-900 transition-colors"
+                  >Self-Hosting</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="text-gray-900 font-semibold mb-4 text-sm">
+              Architecture
+            </h4>
+            <ul class="space-y-3 text-sm text-gray-500">
+              <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Express + WebSocket server
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> rAF
+                animation engine
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Web
+                Audio API sound
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> QR +
+                approval security
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div
+          class="pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-400"
+        >
+          <p>&copy; 2026 splitflap.org. MIT License.</p>
+          <div class="flex gap-6">
+            <a href="#" class="hover:text-gray-900 transition-colors"
+              >Privacy Policy</a
+            >
+            <a href="#" class="hover:text-gray-900 transition-colors">Terms</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- SCROLL REVEAL -->
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const obs = new IntersectionObserver(
+          (entries, o) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                e.target.classList.add("active");
+                o.unobserve(e.target);
+              }
+            });
+          },
+          { threshold: 0.1 },
+        );
+        document.querySelectorAll(".reveal").forEach((el) => obs.observe(el));
+      });
+    </script>
+
+    <!-- BOARD ENGINE -->
+    <script>
+      const state = {
+        animDuration: 360,
+        animPerspective: 3000,
+        animStagger: 40,
+        animEasing: "ease-in-out",
+        msgDelay: 6000,
+        fastSpeed: 25,
+        soundVolume: 0.8,
+        soundRate: 1.5,
+        cols: 22,
+        rows: 5,
+        ridgeCount: 7,
+      };
+      const colorMap = {
+        "🟥": "#e02424",
+        "🟧": "#f97316",
+        "🟨": "#eab308",
+        "🟩": "#16a34a",
+        "🟦": "#2563eb",
+        "🟪": "#9333ea",
+        "⬜": "#ffffff",
+      };
+      const SPOOL = Array.from(
+        " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*()-+=:;',./?🟥🟧🟨🟩🟦🟪⬜",
+      );
+      function spoolIndexOf(ch) {
+        const i = SPOOL.indexOf(ch);
+        return i !== -1 ? i : 0;
+      }
+
+      const sequenceTexts = [
+        "                      \n      GOD IS IN       \n     THE DETAILS.     \n    - LUDWIG MIES     \n                      ",
+        "  OPEN SOURCE  CODE   \n                      \n🟨  NO $3.5K HARDWARE 🟨\n🟥  NO $199 SOFTWARE  🟥\n🟩  FREE FOREVER      🟩",
+        "                      \n    SPLITFLAP.ORG     \n                      \n   SCAN QR. CONTROL.  \n                      ",
+        "🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦\n🟦⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜🟦\n🟦⬜ BUILD SOMETHING  ⬜🟦\n🟦⬜    BEAUTIFUL.    ⬜🟦\n🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦",
+      ];
+
+      let currentChars = [],
+        currentMsgIdx = -1,
+        sequenceTimer = null,
+        isFlipping = false,
+        cellCache = [];
+      let audioEnabled = false,
+        audioCtx = null,
+        clickBuffer = null,
+        wavLoaded = false;
+      let activeAudioCount = 0,
+        lastClickMs = 0;
+      const MAX_CONCURRENT_AUDIO = 8,
+        MIN_CLICK_INTERVAL = 25;
+      let animQueue = [],
+        animRAF = null,
+        animT0 = 0,
+        animTarget = null,
+        animDoneCb = null;
+      const boardWrapper = document.getElementById("vestaboard-wrapper");
+
+      function getAudioCtx() {
+        if (!audioCtx)
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+      async function initAudio() {
+        const ctx = getAudioCtx();
+        if (!clickBuffer) {
+          try {
+            const r = await fetch("click.wav");
+            if (!r.ok) throw 0;
+            const buf = await r.arrayBuffer();
+            clickBuffer = await ctx.decodeAudioData(buf);
+            wavLoaded = true;
+          } catch (e) {}
+        }
+      }
+      function toggleAudio(forceEnable = false) {
+        audioEnabled = forceEnable ? true : !audioEnabled;
+        const icon = document.getElementById("volume-icon");
+        if (audioEnabled) {
+          initAudio();
+          icon.className = "fa-solid fa-volume-high text-lg";
+        } else {
+          icon.className = "fa-solid fa-volume-xmark text-lg";
+        }
+      }
+      function synthClick(vol, rate) {
+        const ctx = getAudioCtx(),
+          now = ctx.currentTime,
+          dur = 0.035;
+        const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate),
+          d = buf.getChannelData(0);
+        const freq = 3500 * rate;
+        for (let i = 0; i < d.length; i++) {
+          const t = i / ctx.sampleRate;
+          d[i] =
+            (Math.random() * 2 -
+              1 +
+              Math.sin(2 * Math.PI * freq * 1.5 * t) * 0.3) *
+            Math.exp(-t / 0.003);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const hp = ctx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = freq;
+        hp.Q.value = 1.5;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = Math.min(freq * 3, 12000);
+        lp.Q.value = 0.7;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        src.connect(hp);
+        hp.connect(lp);
+        lp.connect(gain);
+        gain.connect(ctx.destination);
+        activeAudioCount++;
+        src.onended = () => {
+          activeAudioCount--;
+        };
+        src.start(now);
+        src.stop(now + dur);
+      }
+      function playClick() {
+        if (!audioEnabled) return;
+        const now = performance.now();
+        if (now - lastClickMs < MIN_CLICK_INTERVAL) return;
+        if (activeAudioCount >= MAX_CONCURRENT_AUDIO) return;
+        lastClickMs = now;
+        const ctx = getAudioCtx();
+        if (wavLoaded && clickBuffer) {
+          const src = ctx.createBufferSource();
+          src.buffer = clickBuffer;
+          src.playbackRate.value =
+            state.soundRate + (Math.random() * 0.4 - 0.2);
+          const gain = ctx.createGain();
+          gain.gain.value = state.soundVolume;
+          src.connect(gain);
+          gain.connect(ctx.destination);
+          activeAudioCount++;
+          src.onended = () => {
+            activeAudioCount--;
+          };
+          src.start();
+        } else {
+          synthClick(state.soundVolume, state.soundRate);
+        }
+      }
+
+      function blankGrid() {
+        return Array(state.cols * state.rows).fill(" ");
+      }
+      function messageToGrid(msg) {
+        const lines = msg.split("\n"),
+          g = [];
+        for (let r = 0; r < state.rows; r++) {
+          let chars = Array.from((lines[r] || "").toUpperCase());
+          while (chars.length < state.cols) chars.push(" ");
+          g.push(...chars.slice(0, state.cols));
+        }
+        return g;
+      }
+      function renderBoard() {
+        const total = state.cols * state.rows;
+        if (currentChars.length !== total) currentChars = blankGrid();
+        let ridges = "";
+        for (let i = 0; i < state.ridgeCount; i++)
+          ridges += '<div class="ridge"></div>';
+        let html = '<div class="vestaboard-grid">';
+        currentChars.forEach((ch, i) => {
+          const dc = colorMap[ch] ? "" : ch === " " ? "" : ch;
+          const bg = colorMap[ch] ? ` style="background:${colorMap[ch]}"` : "";
+          html += `<div class="rocker-scale-wrapper"><div class="rocker-switch" data-idx="${i}"><div class="bezel"><div class="bezel-highlight"></div></div><div class="recessed-hole-stroke"><div class="recessed-hole-bg"><div class="rocker-wrapper-top"><div class="rocker-top" data-role="top-bg"${bg}></div><div class="rocker-text rocker-text-top" data-role="static-top">${dc}</div></div><div class="rocker-wrapper-bot"><div class="rocker-bot" data-role="bot-bg"${bg}><div class="ridges">${ridges}</div></div><div class="rocker-text rocker-text-bot" data-role="static-bot">${dc}</div></div><div class="rocker-wrapper-falling"><div class="rocker-falling-front"><div class="rocker-top" data-role="falling-bg"${bg}></div><div class="rocker-text rocker-text-top" data-role="falling-txt">${dc}</div></div></div><div class="rocker-split-overlay"></div></div></div></div></div>`;
+        });
+        html += "</div>";
+        boardWrapper.innerHTML = html;
+        cellCache = [];
+        for (let i = 0; i < total; i++) {
+          const sw = boardWrapper.querySelector(
+            `.rocker-switch[data-idx="${i}"]`,
+          );
+          if (!sw) {
+            cellCache.push(null);
+            continue;
+          }
+          cellCache.push({
+            sTop: sw.querySelector('[data-role="static-top"]'),
+            sBtm: sw.querySelector('[data-role="static-bot"]'),
+            fTxt: sw.querySelector('[data-role="falling-txt"]'),
+            topBg: sw.querySelector('[data-role="top-bg"]'),
+            botBg: sw.querySelector('[data-role="bot-bg"]'),
+            fallBg: sw.querySelector('[data-role="falling-bg"]'),
+            wrap: sw.querySelector(".rocker-wrapper-falling"),
+          });
+        }
+      }
+
+      function scheduleAction(t, fn) {
+        animQueue.push({ time: t, fn });
+      }
+      function animTick(now) {
+        const elapsed = now - animT0;
+        let i = 0;
+        while (i < animQueue.length && animQueue[i].time <= elapsed) {
+          animQueue[i].fn();
+          i++;
+        }
+        if (i > 0) animQueue.splice(0, i);
+        if (animQueue.length > 0) {
+          animRAF = requestAnimationFrame(animTick);
+        } else {
+          animRAF = null;
+          currentChars = [...animTarget];
+          isFlipping = false;
+          if (animDoneCb) animDoneCb();
+        }
+      }
+      function startAnimLoop() {
+        animQueue.sort((a, b) => a.time - b.time);
+        animT0 = performance.now();
+        animRAF = requestAnimationFrame(animTick);
+      }
+      function cancelAnimLoop() {
+        if (animRAF) {
+          cancelAnimationFrame(animRAF);
+          animRAF = null;
+        }
+        animQueue = [];
+        cellCache.forEach((c) => {
+          if (c && c.wrap && c.wrap._anim)
+            try {
+              c.wrap._anim.cancel();
+            } catch (e) {}
+        });
+      }
+      function getDelay(idx) {
+        return (
+          (idx % state.cols) * state.animStagger +
+          Math.floor(idx / state.cols) * state.animStagger * 1.5
+        );
+      }
+
+      function buildCellSchedule(idx, oldChar, newChar) {
+        const c = cellCache[idx];
+        if (!c) return 0;
+        const delay = getDelay(idx);
+        let oi = spoolIndexOf(oldChar || " "),
+          ni = spoolIndexOf(newChar || " ");
+        let steps = ni - oi;
+        if (steps < 0) steps += SPOOL.length;
+        if (steps === 0 && oldChar !== newChar) steps = 1;
+        const path = [];
+        for (let j = 1; j <= steps; j++)
+          path.push(SPOOL[(oi + j) % SPOOL.length]);
+        if (!path.length || path[path.length - 1] !== (newChar || " "))
+          path.push(newChar || " ");
+        let t = delay;
+        path.forEach((char, i) => {
+          const isLast = i === path.length - 1;
+          const speed = isLast ? state.animDuration : state.fastSpeed;
+          const easing = isLast ? state.animEasing : "linear";
+          const isColor = !!colorMap[char],
+            dc = isColor ? "" : char === " " ? "" : char,
+            bg = isColor ? colorMap[char] : "";
+          const prev = i === 0 ? oldChar || " " : path[i - 1],
+            prevIsColor = !!colorMap[prev];
+          const pdc = prevIsColor ? "" : prev === " " ? "" : prev,
+            pbg = prevIsColor ? colorMap[prev] : "";
+          const ct = t,
+            cs = speed;
+          scheduleAction(ct, () => {
+            if (c.sTop) c.sTop.textContent = dc;
+            if (c.topBg) c.topBg.style.background = bg;
+            if (c.fTxt) c.fTxt.textContent = pdc;
+            if (c.fallBg) c.fallBg.style.background = pbg;
+            if (c.wrap) {
+              if (c.wrap._anim)
+                try {
+                  c.wrap._anim.cancel();
+                } catch (e) {}
+              c.wrap.style.opacity = "1";
+              c.wrap._anim = c.wrap.animate(
+                [
+                  { transform: "rotateX(0deg)", opacity: 1 },
+                  { transform: "rotateX(-90deg)", opacity: 0 },
+                ],
+                {
+                  duration: cs,
+                  easing: easing === "linear" ? "linear" : easing,
+                  fill: "forwards",
+                },
+              );
+            }
+            if (isLast || i % 3 === 0) playClick();
+          });
+          scheduleAction(ct + cs * 0.5, () => {
+            if (c.sBtm) c.sBtm.textContent = dc;
+            if (c.botBg) c.botBg.style.background = bg;
+          });
+          scheduleAction(ct + cs, () => {
+            if (c.wrap) {
+              if (c.wrap._anim)
+                try {
+                  c.wrap._anim.cancel();
+                } catch (e) {}
+              c.wrap.style.opacity = "0";
+              c.wrap.style.transform = "";
+            }
+            if (c.fTxt) c.fTxt.textContent = dc;
+            if (c.fallBg) c.fallBg.style.background = bg;
+          });
+          t += speed;
+        });
+        return t;
+      }
+
+      function flipToTarget(target, onDone) {
+        if (isFlipping) {
+          if (onDone) onDone();
+          return;
+        }
+        isFlipping = true;
+        const total = state.cols * state.rows;
+        if (currentChars.length !== total) currentChars = blankGrid();
+        const changed = [];
+        for (let i = 0; i < total; i++)
+          if (currentChars[i] !== target[i]) changed.push(i);
+        if (!changed.length) {
+          isFlipping = false;
+          if (onDone) onDone();
+          return;
+        }
+        cancelAnimLoop();
+        animTarget = target;
+        animDoneCb = onDone || null;
+        animQueue = [];
+        let maxEnd = 0;
+        changed.forEach((idx) => {
+          const end = buildCellSchedule(idx, currentChars[idx], target[idx]);
+          if (end > maxEnd) maxEnd = end;
+        });
+        scheduleAction(maxEnd + 50, () => {});
+        startAnimLoop();
+      }
+
+      function playSequence() {
+        if (sequenceTimer) {
+          clearTimeout(sequenceTimer);
+          sequenceTimer = null;
+        }
+        const msgs = sequenceTexts;
+        if (!msgs.length) return;
+        function go(i) {
+          if (i >= msgs.length) {
+            setTimeout(() => go(0), state.msgDelay);
+            return;
+          }
+          currentMsgIdx = i;
+          flipToTarget(messageToGrid(msgs[i]), () => {
+            sequenceTimer = setTimeout(() => go(i + 1), state.msgDelay);
+          });
+        }
+        if (currentMsgIdx !== -1) {
+          cancelAnimLoop();
+          isFlipping = false;
+          currentMsgIdx = -1;
+          flipToTarget(blankGrid(), () => {
+            setTimeout(() => go(0), state.msgDelay);
+          });
+        } else go(0);
+      }
+      function skipSequence() {
+        if (isFlipping) return;
+        if (!audioEnabled) toggleAudio(true);
+        if (sequenceTimer) {
+          clearTimeout(sequenceTimer);
+          sequenceTimer = null;
+        }
+        currentMsgIdx = (currentMsgIdx + 1) % sequenceTexts.length;
+        flipToTarget(messageToGrid(sequenceTexts[currentMsgIdx]), () => {
+          sequenceTimer = setTimeout(() => playSequence(), state.msgDelay);
+        });
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key.toLowerCase() === "m") toggleAudio();
+        else if (e.key.toLowerCase() === "f") {
+          const el = document.getElementById("vestaboard-wrapper");
+          if (!document.fullscreenElement)
+            el.requestFullscreen().catch(() => {});
+          else document.exitFullscreen();
+        }
+      });
+      window.addEventListener("DOMContentLoaded", () => {
+        renderBoard();
+        setTimeout(() => playSequence(), 1000);
+      });
+    </script>
+  </body>
+</html>

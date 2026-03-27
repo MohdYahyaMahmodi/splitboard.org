@@ -1,0 +1,1389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,user-scalable=no"
+    />
+    <title>splitflap.org — Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;300;400;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        font-family: "Inter", sans-serif;
+        user-select: none;
+      }
+
+      /* Status bar */
+      #status-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        z-index: 100;
+        font-size: 11px;
+        color: #555;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        transition:
+          transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.4s;
+      }
+      #status-bar.hidden {
+        transform: translateY(-100%);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .sb-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .sb-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #333;
+        transition:
+          background 0.3s,
+          box-shadow 0.3s;
+      }
+      .sb-dot.live {
+        background: #22c55e;
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+      }
+      .sb-dot.warn {
+        background: #eab308;
+        box-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+      }
+      .sb-label {
+        font-size: 11px;
+        color: #555;
+        transition: color 0.3s;
+      }
+      .sb-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sb-btn {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .sb-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .pwr-btn {
+        color: #333;
+      }
+      .pwr-btn:hover {
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.08);
+      }
+      .pwr-btn.inactive {
+        opacity: 0.3;
+        pointer-events: none;
+      }
+      .hide-btn {
+        color: #333;
+        background: none;
+        border: none;
+        font-size: 12px;
+      }
+      .hide-btn:hover {
+        color: #888;
+      }
+      #show-bar-dot {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 32px;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s;
+      }
+      #show-bar-dot.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #show-bar-dot:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      /* Board */
+      .board-area {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+      }
+      #vestaboard-wrapper {
+        position: relative;
+        transform-origin: center center;
+        transition: opacity 0.25s ease;
+      }
+      #vestaboard-wrapper.fading {
+        opacity: 0;
+      }
+
+      /* Structural */
+      .rocker-switch * {
+        box-sizing: border-box;
+      }
+      .rocker-switch {
+        position: relative;
+        will-change: transform;
+      }
+      .bezel,
+      .bezel-highlight,
+      .recessed-hole-stroke,
+      .recessed-hole-bg,
+      .rocker-wrapper-top,
+      .rocker-wrapper-bot,
+      .rocker-wrapper-falling,
+      .rocker-split-overlay,
+      .ridges {
+        position: absolute;
+      }
+      .bezel-highlight {
+        pointer-events: none;
+      }
+      .rocker-top,
+      .rocker-bot,
+      .ridge {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .rocker-top,
+      .rocker-bot {
+        height: 100%;
+      }
+      .ridges {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .rocker-scale-wrapper {
+        contain: layout style paint;
+      }
+      .rocker-wrapper-falling {
+        will-change: transform, opacity;
+      }
+
+      /* ── Pairing overlay ── */
+      #pair-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 50;
+        transition:
+          opacity 0.5s,
+          visibility 0.5s;
+      }
+      #pair-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .pair-title {
+        font-size: 13px;
+        color: #444;
+        font-weight: 500;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 24px;
+      }
+      #qr-container {
+        background: #fff;
+        padding: 16px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #qr-container canvas {
+        display: block;
+      }
+      .pair-hint {
+        font-size: 12px;
+        color: #333;
+        text-align: center;
+        line-height: 1.7;
+        max-width: 320px;
+        margin-bottom: 16px;
+      }
+      .pair-toggle {
+        font-size: 11px;
+        color: #444;
+        cursor: pointer;
+        padding: 6px 14px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: all 0.2s;
+        margin-bottom: 12px;
+      }
+      .pair-toggle:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #888;
+      }
+      #manual-code-area {
+        display: none;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+      #manual-code-area.show {
+        display: block;
+      }
+      .manual-code {
+        font-family: "Roboto Mono", monospace;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: 6px;
+        color: #fff;
+        padding: 12px 24px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        display: inline-block;
+      }
+      .manual-hint {
+        font-size: 10px;
+        color: #333;
+        margin-top: 8px;
+      }
+      .pair-url {
+        font-size: 10px;
+        color: #444;
+        font-family: "Roboto Mono", monospace;
+        margin-top: 8px;
+      }
+
+      /* ── Approval overlay ── */
+      #approval-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.92);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 60;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.3s,
+          visibility 0.3s;
+      }
+      #approval-overlay.show {
+        opacity: 1;
+        visibility: visible;
+      }
+      .approval-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: rgba(234, 179, 8, 0.1);
+        border: 2px solid rgba(234, 179, 8, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        font-size: 28px;
+      }
+      .approval-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 8px;
+      }
+      .approval-sub {
+        font-size: 13px;
+        color: #555;
+        margin-bottom: 28px;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .approval-btns {
+        display: flex;
+        gap: 12px;
+      }
+      .approval-btns button {
+        padding: 14px 32px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s;
+        font-family: "Inter", sans-serif;
+      }
+      .approval-btns button:active {
+        opacity: 0.7;
+      }
+      .btn-approve {
+        background: #22c55e;
+        color: #fff;
+      }
+      .btn-reject {
+        background: rgba(255, 255, 255, 0.06);
+        color: #888;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .approval-kbd {
+        font-size: 11px;
+        color: #333;
+        margin-top: 16px;
+      }
+      .approval-kbd kbd {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-family: "Roboto Mono", monospace;
+        color: #666;
+      }
+    </style>
+    <style id="dynamic-board-css"></style>
+  </head>
+  <body>
+    <div id="status-bar">
+      <div class="sb-left">
+        <div class="sb-dot" id="ws-dot"></div>
+        <span class="sb-label" id="ws-label">Connecting...</span>
+      </div>
+      <div class="sb-right">
+        <div
+          class="sb-btn pwr-btn inactive"
+          id="pwr-btn"
+          onclick="kickCompanion()"
+          title="Disconnect companion"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M18.36 6.64a9 9 0 11-12.73 0" />
+            <line x1="12" y1="2" x2="12" y2="12" />
+          </svg>
+        </div>
+        <div class="sb-btn hide-btn" onclick="hideStatusBar()" title="Hide (H)">
+          ✕
+        </div>
+      </div>
+    </div>
+    <div id="show-bar-dot" onclick="showStatusBar()"></div>
+
+    <!-- Pairing -->
+    <div id="pair-overlay">
+      <div class="pair-title">Scan to connect</div>
+      <div id="qr-container"></div>
+      <div class="pair-hint">
+        Scan the QR code with your phone camera to pair instantly.
+      </div>
+      <div class="pair-toggle" onclick="toggleManualCode()">
+        Show manual code
+      </div>
+      <div id="manual-code-area">
+        <div class="manual-code" id="display-code">------</div>
+        <div class="manual-hint">
+          Enter this code on companion.html — TV will ask you to approve.
+        </div>
+      </div>
+      <div class="pair-url" id="companion-url"></div>
+    </div>
+
+    <!-- Approval gate -->
+    <div id="approval-overlay">
+      <div class="approval-icon">📱</div>
+      <div class="approval-title">Device wants to connect</div>
+      <div class="approval-sub">
+        Someone entered your board code manually.<br />Is this you?
+      </div>
+      <div class="approval-btns">
+        <button class="btn-reject" onclick="rejectPair()">Reject</button>
+        <button class="btn-approve" onclick="approvePair()">Approve</button>
+      </div>
+      <div class="approval-kbd">
+        <kbd>Enter</kbd> approve &nbsp; <kbd>Esc</kbd> reject
+      </div>
+    </div>
+
+    <div class="board-area" id="board-area">
+      <div id="vestaboard-wrapper"></div>
+    </div>
+
+    <script>
+      const COLOR_MAP = {
+        "🟥": "#e02424",
+        "🟧": "#f97316",
+        "🟨": "#eab308",
+        "🟩": "#16a34a",
+        "🟦": "#2563eb",
+        "🟪": "#9333ea",
+        "⬜": "#ffffff",
+      };
+      const SPOOL = Array.from(
+        " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*()-+=:;',./?",
+      );
+      Object.keys(COLOR_MAP).forEach((e) => SPOOL.push(e));
+      function spoolIndexOf(ch) {
+        const i = SPOOL.indexOf(ch);
+        return i !== -1 ? i : 0;
+      }
+
+      const S = {
+        animDuration: 360,
+        animPerspective: 3000,
+        animStagger: 40,
+        animEasing: "ease-in-out",
+        msgDelay: 6000,
+        fastSpeed: 25,
+        loopSequence: true,
+        soundVolume: 0.8,
+        soundRate: 1.5,
+        cols: 22,
+        rows: 5,
+        scale: 0.22,
+        gridGap: 11,
+        fontFamily: "'Roboto Mono', monospace",
+        fontSize: 247,
+        fontWeight: 300,
+        fontX: 0,
+        fontY: -52,
+        fontColor: "#ffffff",
+        boardPad: 13,
+        boardShadow: 0.4,
+        boardRadius: 6,
+        boardBg: "#0f0f0f",
+        previewBg: "#000000",
+        width: 250,
+        height: 540,
+        split: 194,
+        pinch: 14,
+        pinchHeight: 54,
+        pinchSlope: 7,
+        outerRadius: 30,
+        bezelRadius: 30,
+        radius: 24,
+        shadow: 0,
+        padBezel: 10,
+        padHole: 24,
+        gap: 7,
+        highlightInset: 0,
+        strokeW: 0,
+        ridgeCount: 7,
+        ridgeHeight: 7,
+        ridgeGap: 1,
+        ridgeRadius: 20,
+        ridgeShadow: 0,
+        ridgeBottom: 0,
+        ridgeMargin: 0,
+        r1: "#000000",
+        r2: "#000000",
+        r3: "#000000",
+        r4: "#000000",
+        c_bg: "#0f0f0f",
+        c_holeStroke: "#000000",
+        c_holeBg: "#040404",
+        g_bezel1: "#000000",
+        g_bezel2: "#000000",
+        g_top1: "#0f0f0f",
+        g_top2: "#0f0f0f",
+        g_bot1: "#0f0f0f",
+        g_bot2: "#0f0f0f",
+        g_bot3: "#0f0f0f",
+        autoFit: true,
+      };
+      let messagesText = "",
+        boardMode = "messages",
+        companionConnected = false,
+        clockInterval = null,
+        isLocked = false;
+      let pendingApproval = false;
+
+      const boardWrapper = document.getElementById("vestaboard-wrapper");
+      const boardArea = document.getElementById("board-area");
+      const dynamicCSS = document.getElementById("dynamic-board-css");
+      const pairOverlay = document.getElementById("pair-overlay");
+      const approvalOverlay = document.getElementById("approval-overlay");
+
+      // ═══════════════════════════════════
+      // AUDIO
+      // ═══════════════════════════════════
+      let audioCtx = null,
+        clickBuffer = null,
+        wavLoaded = false,
+        activeAudioCount = 0,
+        lastClickMs = 0;
+      const MAX_CONCURRENT_AUDIO = 8,
+        MIN_CLICK_INTERVAL = 25;
+      function getAudioCtx() {
+        if (!audioCtx)
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+      function loadClickWav() {
+        const ctx = getAudioCtx();
+        fetch("click.wav")
+          .then((r) => {
+            if (!r.ok) throw 0;
+            return r.arrayBuffer();
+          })
+          .then((b) => ctx.decodeAudioData(b))
+          .then((d) => {
+            clickBuffer = d;
+            wavLoaded = true;
+          })
+          .catch(() => {});
+      }
+      function synthClick(vol, rate) {
+        const ctx = getAudioCtx(),
+          now = ctx.currentTime,
+          dur = 0.035;
+        const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate),
+          d = buf.getChannelData(0);
+        const freq = 3500 * rate;
+        for (let i = 0; i < d.length; i++) {
+          const t = i / ctx.sampleRate;
+          d[i] =
+            (Math.random() * 2 -
+              1 +
+              Math.sin(2 * Math.PI * freq * 1.5 * t) * 0.3) *
+            Math.exp(-t / 0.003);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const hp = ctx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = freq;
+        hp.Q.value = 1.5;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = Math.min(freq * 3, 12000);
+        lp.Q.value = 0.7;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        src.connect(hp);
+        hp.connect(lp);
+        lp.connect(gain);
+        gain.connect(ctx.destination);
+        activeAudioCount++;
+        src.onended = () => {
+          activeAudioCount--;
+        };
+        src.start(now);
+        src.stop(now + dur);
+      }
+      function playClick(vol, rate) {
+        const now = performance.now();
+        if (
+          now - lastClickMs < MIN_CLICK_INTERVAL ||
+          activeAudioCount >= MAX_CONCURRENT_AUDIO
+        )
+          return;
+        lastClickMs = now;
+        const ctx = getAudioCtx();
+        if (wavLoaded && clickBuffer) {
+          const src = ctx.createBufferSource();
+          src.buffer = clickBuffer;
+          src.playbackRate.value = rate + (Math.random() * 0.4 - 0.2);
+          const gain = ctx.createGain();
+          gain.gain.value = vol;
+          src.connect(gain);
+          gain.connect(ctx.destination);
+          activeAudioCount++;
+          src.onended = () => {
+            activeAudioCount--;
+          };
+          src.start();
+        } else synthClick(vol, rate);
+      }
+
+      // ═══════════════════════════════════
+      // BOARD
+      // ═══════════════════════════════════
+      let currentChars = [],
+        currentMsgIdx = -1,
+        sequenceTimer = null,
+        isFlipping = false,
+        cellCache = [];
+      function parseMessages() {
+        return messagesText
+          .split(/\n---\n|\n---$|^---\n/)
+          .filter((m) => m.trim() !== "");
+      }
+      function messageToGrid(msg) {
+        const lines = msg.split("\n"),
+          g = [];
+        for (let r = 0; r < S.rows; r++) {
+          let c = Array.from((lines[r] || "").toUpperCase());
+          while (c.length < S.cols) c.push(" ");
+          g.push(...c.slice(0, S.cols));
+        }
+        return g;
+      }
+      function blankGrid() {
+        return Array(S.cols * S.rows).fill(" ");
+      }
+      function renderBoard() {
+        const total = S.cols * S.rows;
+        if (currentChars.length !== total) currentChars = blankGrid();
+        let ridges = "";
+        for (let i = 0; i < S.ridgeCount; i++)
+          ridges += '<div class="ridge"></div>';
+        let html = '<div class="vestaboard-grid">';
+        currentChars.forEach((ch, i) => {
+          const isC = !!COLOR_MAP[ch],
+            dc = isC ? "" : ch === " " ? "" : ch,
+            bg = isC ? ` style="background:${COLOR_MAP[ch]}"` : "";
+          html += `<div class="rocker-scale-wrapper"><div class="rocker-switch" data-idx="${i}"><div class="bezel"><div class="bezel-highlight"></div></div><div class="recessed-hole-stroke"><div class="recessed-hole-bg"><div class="rocker-wrapper-top"><div class="rocker-top" data-role="top-bg"${bg}></div><div class="rocker-text rocker-text-top" data-role="static-top">${dc}</div></div><div class="rocker-wrapper-bot"><div class="rocker-bot" data-role="bot-bg"${bg}><div class="ridges">${ridges}</div></div><div class="rocker-text rocker-text-bot" data-role="static-bot">${dc}</div></div><div class="rocker-wrapper-falling"><div class="rocker-falling-front"><div class="rocker-top" data-role="falling-bg"${bg}></div><div class="rocker-text rocker-text-top" data-role="falling-txt">${dc}</div></div></div><div class="rocker-split-overlay"></div></div></div></div></div>`;
+        });
+        html += "</div>";
+        boardWrapper.innerHTML = html;
+        cellCache = [];
+        for (let i = 0; i < total; i++) {
+          const sw = boardWrapper.querySelector(
+            `.rocker-switch[data-idx="${i}"]`,
+          );
+          if (!sw) {
+            cellCache.push(null);
+            continue;
+          }
+          cellCache.push({
+            sTop: sw.querySelector('[data-role="static-top"]'),
+            sBtm: sw.querySelector('[data-role="static-bot"]'),
+            fTxt: sw.querySelector('[data-role="falling-txt"]'),
+            topBg: sw.querySelector('[data-role="top-bg"]'),
+            botBg: sw.querySelector('[data-role="bot-bg"]'),
+            fallBg: sw.querySelector('[data-role="falling-bg"]'),
+            wrap: sw.querySelector(".rocker-wrapper-falling"),
+          });
+        }
+      }
+
+      // ═══════════════════════════════════
+      // ANIMATION
+      // ═══════════════════════════════════
+      let animQueue = [],
+        animRAF = null,
+        animT0 = 0,
+        animTarget = null,
+        animDoneCb = null;
+      function scheduleAction(t, fn) {
+        animQueue.push({ time: t, fn });
+      }
+      function animTick(now) {
+        const el = now - animT0;
+        let i = 0;
+        while (i < animQueue.length && animQueue[i].time <= el) {
+          animQueue[i].fn();
+          i++;
+        }
+        if (i > 0) animQueue.splice(0, i);
+        if (animQueue.length > 0) animRAF = requestAnimationFrame(animTick);
+        else {
+          animRAF = null;
+          currentChars = [...animTarget];
+          isFlipping = false;
+          if (animDoneCb) animDoneCb();
+        }
+      }
+      function startAnimLoop() {
+        animQueue.sort((a, b) => a.time - b.time);
+        animT0 = performance.now();
+        animRAF = requestAnimationFrame(animTick);
+      }
+      function cancelAnimLoop() {
+        if (animRAF) {
+          cancelAnimationFrame(animRAF);
+          animRAF = null;
+        }
+        animQueue = [];
+        cellCache.forEach((c) => {
+          if (c && c.wrap && c.wrap._anim)
+            try {
+              c.wrap._anim.cancel();
+            } catch (_) {}
+        });
+      }
+      function getDelay(idx) {
+        return (
+          (idx % S.cols) * S.animStagger +
+          Math.floor(idx / S.cols) * S.animStagger * 1.5
+        );
+      }
+      function buildCellSchedule(idx, oldCh, newCh) {
+        const c = cellCache[idx];
+        if (!c) return 0;
+        const delay = getDelay(idx);
+        let oi = spoolIndexOf(oldCh || " "),
+          ni = spoolIndexOf(newCh || " "),
+          steps = ni - oi;
+        if (steps < 0) steps += SPOOL.length;
+        if (steps === 0 && oldCh !== newCh) steps = 1;
+        const path = [];
+        for (let i = 1; i <= steps; i++)
+          path.push(SPOOL[(oi + i) % SPOOL.length]);
+        if (!path.length || path[path.length - 1] !== (newCh || " "))
+          path.push(newCh || " ");
+        let t = delay;
+        path.forEach((ch, i) => {
+          const isLast = i === path.length - 1,
+            speed = isLast ? S.animDuration : S.fastSpeed,
+            easing = isLast ? S.animEasing : "linear";
+          const isC = !!COLOR_MAP[ch],
+            dc = isC ? "" : ch === " " ? "" : ch,
+            bg = isC ? COLOR_MAP[ch] : "";
+          const prev = i === 0 ? oldCh || " " : path[i - 1],
+            pC = !!COLOR_MAP[prev],
+            pdc = pC ? "" : prev === " " ? "" : prev,
+            pbg = pC ? COLOR_MAP[prev] : "";
+          const ct = t,
+            cs = speed;
+          scheduleAction(ct, () => {
+            if (c.sTop) c.sTop.textContent = dc;
+            if (c.topBg) c.topBg.style.background = bg;
+            if (c.fTxt) c.fTxt.textContent = pdc;
+            if (c.fallBg) c.fallBg.style.background = pbg;
+            if (c.wrap) {
+              if (c.wrap._anim)
+                try {
+                  c.wrap._anim.cancel();
+                } catch (_) {}
+              c.wrap.style.opacity = "1";
+              c.wrap._anim = c.wrap.animate(
+                [
+                  { transform: "rotateX(0deg)", opacity: 1 },
+                  { transform: "rotateX(-90deg)", opacity: 0 },
+                ],
+                {
+                  duration: cs,
+                  easing: easing === "linear" ? "linear" : easing,
+                  fill: "forwards",
+                },
+              );
+            }
+            if (isLast || i % 3 === 0) playClick(S.soundVolume, S.soundRate);
+          });
+          scheduleAction(ct + cs * 0.5, () => {
+            if (c.sBtm) c.sBtm.textContent = dc;
+            if (c.botBg) c.botBg.style.background = bg;
+          });
+          scheduleAction(ct + cs, () => {
+            if (c.wrap) {
+              if (c.wrap._anim)
+                try {
+                  c.wrap._anim.cancel();
+                } catch (_) {}
+              c.wrap.style.opacity = "0";
+              c.wrap.style.transform = "";
+            }
+            if (c.fTxt) c.fTxt.textContent = dc;
+            if (c.fallBg) c.fallBg.style.background = bg;
+          });
+          t += speed;
+        });
+        return t;
+      }
+      function flipToTarget(target, onDone) {
+        if (isFlipping) {
+          if (onDone) onDone();
+          return;
+        }
+        isFlipping = true;
+        const total = S.cols * S.rows;
+        if (currentChars.length !== total) currentChars = blankGrid();
+        const changed = [];
+        for (let i = 0; i < total; i++)
+          if (currentChars[i] !== target[i]) changed.push(i);
+        if (!changed.length) {
+          isFlipping = false;
+          if (onDone) onDone();
+          return;
+        }
+        cancelAnimLoop();
+        animTarget = target;
+        animDoneCb = onDone || null;
+        animQueue = [];
+        let mx = 0;
+        changed.forEach((idx) => {
+          const e = buildCellSchedule(idx, currentChars[idx], target[idx]);
+          if (e > mx) mx = e;
+        });
+        scheduleAction(mx + 50, () => {});
+        startAnimLoop();
+      }
+
+      function playSequence() {
+        stopClock();
+        if (sequenceTimer) {
+          clearTimeout(sequenceTimer);
+          sequenceTimer = null;
+        }
+        const msgs = parseMessages();
+        if (!msgs.length) return;
+        function go(i) {
+          if (i >= msgs.length) {
+            if (S.loopSequence) setTimeout(() => go(0), S.msgDelay);
+            return;
+          }
+          currentMsgIdx = i;
+          flipToTarget(messageToGrid(msgs[i]), () => {
+            sequenceTimer = setTimeout(() => go(i + 1), S.msgDelay);
+          });
+        }
+        if (currentMsgIdx !== -1) {
+          cancelAnimLoop();
+          isFlipping = false;
+          currentMsgIdx = -1;
+          flipToTarget(blankGrid(), () => {
+            setTimeout(() => go(0), S.msgDelay);
+          });
+        } else go(0);
+      }
+      function flipToNext() {
+        stopClock();
+        const msgs = parseMessages();
+        if (!msgs.length) return;
+        currentMsgIdx = (currentMsgIdx + 1) % msgs.length;
+        flipToTarget(messageToGrid(msgs[currentMsgIdx]));
+      }
+      function resetBoard() {
+        stopClock();
+        if (sequenceTimer) {
+          clearTimeout(sequenceTimer);
+          sequenceTimer = null;
+        }
+        cancelAnimLoop();
+        isFlipping = false;
+        currentMsgIdx = -1;
+        flipToTarget(blankGrid());
+      }
+      function startClock() {
+        stopClock();
+        boardMode = "clock";
+        function tick() {
+          const now = new Date(),
+            h = now.getHours(),
+            m = now.getMinutes(),
+            s = now.getSeconds();
+          const h12 = h % 12 || 12,
+            ampm = h >= 12 ? "PM" : "AM";
+          const days = [
+            "SUNDAY",
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY",
+            "SATURDAY",
+          ];
+          const months = [
+            "JAN",
+            "FEB",
+            "MAR",
+            "APR",
+            "MAY",
+            "JUN",
+            "JUL",
+            "AUG",
+            "SEP",
+            "OCT",
+            "NOV",
+            "DEC",
+          ];
+          const timeStr = `${String(h12).padStart(2, " ")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} ${ampm}`;
+          const dateStr = `${days[now.getDay()]}  ${months[now.getMonth()]} ${now.getDate()}`;
+          let lines = [];
+          for (let r = 0; r < S.rows; r++) lines.push("");
+          const mid = Math.floor(S.rows / 2);
+          lines[mid] = timeStr
+            .padStart(Math.floor((S.cols + timeStr.length) / 2))
+            .padEnd(S.cols);
+          if (mid - 1 >= 0)
+            lines[mid - 1] = dateStr
+              .padStart(Math.floor((S.cols + dateStr.length) / 2))
+              .padEnd(S.cols);
+          if (mid + 1 < S.rows) {
+            const y = String(now.getFullYear());
+            lines[mid + 1] = y
+              .padStart(Math.floor((S.cols + y.length) / 2))
+              .padEnd(S.cols);
+          }
+          const grid = [];
+          for (let r = 0; r < S.rows; r++) {
+            let ch = Array.from((lines[r] || "").toUpperCase());
+            while (ch.length < S.cols) ch.push(" ");
+            grid.push(...ch.slice(0, S.cols));
+          }
+          flipToTarget(grid);
+        }
+        tick();
+        clockInterval = setInterval(tick, 1000);
+      }
+      function stopClock() {
+        if (clockInterval) {
+          clearInterval(clockInterval);
+          clockInterval = null;
+        }
+        if (boardMode === "clock") boardMode = "messages";
+      }
+      function flipSystemMessage(text) {
+        stopClock();
+        if (sequenceTimer) {
+          clearTimeout(sequenceTimer);
+          sequenceTimer = null;
+        }
+        cancelAnimLoop();
+        isFlipping = false;
+        currentMsgIdx = -1;
+        const lines = text.split("\n");
+        let msg = "";
+        for (let r = 0; r < S.rows; r++) {
+          const l = lines[r] || "";
+          const pad = l
+            .padStart(Math.floor((S.cols + l.length) / 2))
+            .padEnd(S.cols);
+          msg += (r > 0 ? "\n" : "") + pad.slice(0, S.cols);
+        }
+        flipToTarget(messageToGrid(msg));
+      }
+
+      // ═══════════════════════════════════
+      // CSS BUILDER (same as before)
+      // ═══════════════════════════════════
+      function buildCornerArcs(w, h, r) {
+        const p = (v) => v.toFixed(1) + "px";
+        return {
+          tl: [
+            `0px ${p(r)}`,
+            `${p(r * 0.05)} ${p(r * 0.65)}`,
+            `${p(r * 0.25)} ${p(r * 0.25)}`,
+            `${p(r * 0.65)} ${p(r * 0.05)}`,
+            `${p(r)} 0px`,
+          ],
+          tr: [
+            `${p(w - r)} 0px`,
+            `${p(w - r * 0.65)} ${p(r * 0.05)}`,
+            `${p(w - r * 0.25)} ${p(r * 0.25)}`,
+            `${p(w - r * 0.05)} ${p(r * 0.65)}`,
+            `${p(w)} ${p(r)}`,
+          ],
+          br: [
+            `${p(w)} ${p(h - r)}`,
+            `${p(w - r * 0.05)} ${p(h - r * 0.65)}`,
+            `${p(w - r * 0.25)} ${p(h - r * 0.25)}`,
+            `${p(w - r * 0.65)} ${p(h - r * 0.05)}`,
+            `${p(w - r)} ${p(h)}`,
+          ],
+          bl: [
+            `${p(r)} ${p(h)}`,
+            `${p(r * 0.65)} ${p(h - r * 0.05)}`,
+            `${p(r * 0.25)} ${p(h - r * 0.25)}`,
+            `${p(r * 0.05)} ${p(h - r * 0.65)}`,
+            `0px ${p(h - r)}`,
+          ],
+        };
+      }
+      function buildDynamicCSS() {
+        const s = S,
+          hw = s.width - s.padHole * 2,
+          hh = s.height - s.padHole * 2 + 10,
+          ihw = hw - s.strokeW * 2,
+          ihh = hh - s.strokeW * 2,
+          ir = Math.max(0, s.radius - s.strokeW);
+        const py1 = Math.max(s.radius, s.split - s.pinchHeight - s.pinchSlope),
+          py2 = s.split - s.pinchHeight,
+          py3 = s.split + s.gap + s.pinchHeight,
+          py4 = Math.min(
+            hh - s.radius,
+            s.split + s.gap + s.pinchHeight + s.pinchSlope,
+          );
+        const c = buildCornerArcs(hw, hh, s.radius),
+          ic = buildCornerArcs(ihw, ihh, ir);
+        const holeClip = `polygon(${c.tl},${c.tr},${hw}px ${py1}px,${hw - s.pinch}px ${py2}px,${hw - s.pinch}px ${py3}px,${hw}px ${py4}px,${c.br},${c.bl},0px ${py4}px,${s.pinch}px ${py3}px,${s.pinch}px ${py2}px,0px ${py1}px)`;
+        const ipy1 = Math.max(ir, py1 - s.strokeW),
+          ipy2 = py2 - s.strokeW,
+          ipy3 = py3 - s.strokeW,
+          ipy4 = Math.min(ihh - ir, py4 - s.strokeW);
+        const holeBgClip = `polygon(${ic.tl},${ic.tr},${ihw}px ${ipy1}px,${ihw - s.pinch}px ${ipy2}px,${ihw - s.pinch}px ${ipy3}px,${ihw}px ${ipy4}px,${ic.br},${ic.bl},0px ${ipy4}px,${s.pinch}px ${ipy3}px,${s.pinch}px ${ipy2}px,0px ${ipy1}px)`;
+        const topH = s.split - s.strokeW,
+          topClip = `polygon(${ic.tl},${ic.tr},${ihw}px ${ipy1}px,${ihw - s.pinch}px ${ipy2}px,${ihw - s.pinch}px ${topH}px,${s.pinch}px ${topH}px,${s.pinch}px ${ipy2}px,0px ${ipy1}px)`;
+        const botH = ihh - topH - s.gap,
+          lpy3 = s.pinchHeight,
+          lpy4 = s.pinchHeight + s.pinchSlope;
+        const botClip = `polygon(${s.pinch}px 0px,${ihw - s.pinch}px 0px,${ihw - s.pinch}px ${lpy3}px,${ihw}px ${lpy4}px,${ic.br},${ic.bl},0px ${lpy4}px,${s.pinch}px ${lpy3}px)`;
+        const rh = (v) =>
+          Math.round(v * 255)
+            .toString(16)
+            .padStart(2, "0");
+        return `.rocker-switch{width:${s.width}px;height:${s.height}px;border-radius:${s.outerRadius}px;background-color:${s.c_bg};${s.shadow > 0 ? `filter:drop-shadow(0 20px 30px rgba(0,0,0,${s.shadow}));` : ""}transform-style:preserve-3d}.bezel{left:${s.padBezel}px;top:${s.padBezel - 7}px;width:${s.width - s.padBezel * 2}px;height:${s.height - s.padBezel * 2 + 10}px;border-radius:${s.bezelRadius}px;background:linear-gradient(to bottom,${s.g_bezel1},${s.g_bezel2})}.bezel-highlight{inset:${s.highlightInset}px;border:${s.highlightInset > 0 ? "1px" : "0px"} solid rgba(255,255,255,.05);border-radius:${Math.max(0, s.bezelRadius - s.highlightInset)}px}.recessed-hole-stroke{left:${s.padHole}px;top:${s.padHole - 5}px;width:${hw}px;height:${hh}px;background-color:${s.c_holeStroke};-webkit-clip-path:${holeClip};clip-path:${holeClip}}.recessed-hole-bg{left:${s.strokeW}px;top:${s.strokeW}px;width:${ihw}px;height:${ihh}px;background-color:${s.c_holeBg};-webkit-clip-path:${holeBgClip};clip-path:${holeBgClip}}.rocker-wrapper-top{left:0;top:0;width:${ihw}px;height:${topH}px;overflow:hidden}.rocker-top{background:linear-gradient(to bottom,${s.g_top1},${s.g_top2});-webkit-clip-path:${topClip};clip-path:${topClip};transition:background 60ms}.rocker-wrapper-bot{left:0;top:${topH + s.gap}px;width:${ihw}px;height:${botH}px;overflow:hidden}.rocker-bot{background:linear-gradient(to bottom,${s.g_bot1} 0%,${s.g_bot2} 60%,${s.g_bot3} 100%);-webkit-clip-path:${botClip};clip-path:${botClip};transition:background 60ms}.rocker-wrapper-falling{left:0;top:0;width:${ihw}px;height:${topH}px;transform-origin:bottom center;z-index:5;transform-style:preserve-3d;opacity:0;pointer-events:none}.rocker-falling-front{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;-webkit-clip-path:${topClip};clip-path:${topClip};overflow:hidden}.rocker-split-overlay{position:absolute;left:0;width:${ihw}px;top:${topH}px;height:${s.gap}px;background-color:${s.c_holeBg};z-index:20;pointer-events:none;box-shadow:0 -1px 2px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.9)}.ridges{bottom:${s.ridgeBottom}px;left:${s.ridgeMargin}px;width:calc(100% - ${s.ridgeMargin * 2}px);height:${s.ridgeHeight * s.ridgeCount + s.ridgeGap * (s.ridgeCount - 1)}px}.ridge{height:${s.ridgeHeight}px;margin-bottom:${s.ridgeGap}px;border-radius:${s.ridgeRadius}px;background:linear-gradient(to bottom,${s.r1}${rh(s.ridgeShadow)} 0%,${s.r2}05 20%,${s.r3}66 70%,${s.r4}e6 100%);border-top:${s.ridgeShadow > 0 ? "1px solid rgba(255,255,255," + s.ridgeShadow + ")" : "none"}}.vestaboard-grid{display:grid;grid-template-columns:repeat(${s.cols},auto);gap:${s.gridGap}px;padding:${s.boardPad}px;background-color:${s.boardBg};${s.boardShadow > 0 ? `box-shadow:0 10px 30px -5px rgba(0,0,0,${s.boardShadow}),0 4px 10px rgba(0,0,0,${s.boardShadow * 0.5});` : ""}border-radius:${s.boardRadius}px}.rocker-scale-wrapper{perspective:${s.animPerspective}px;width:calc(${s.width}px*${s.scale});height:calc(${s.height}px*${s.scale});position:relative}.rocker-switch{transform:scale(${s.scale});transform-origin:top left}.rocker-text{position:absolute;width:${ihw}px;height:${ihh}px;display:flex;justify-content:center;align-items:center;z-index:10;pointer-events:none;font-family:${s.fontFamily};font-size:${s.fontSize}px;font-weight:${s.fontWeight};color:${s.fontColor};transform:translate(${s.fontX}px,${s.fontY}px);line-height:1;text-align:center;transition:opacity 80ms}.rocker-text-top{top:0;left:0}.rocker-text-bot{top:-${topH + s.gap}px;left:0}`;
+      }
+
+      let lastStructKey = "",
+        rebuildTimeout = null;
+      function applySettings(forceRebuild) {
+        boardArea.style.backgroundColor = S.previewBg;
+        const sk = `${S.cols}|${S.rows}|${S.ridgeCount}`;
+        if (sk !== lastStructKey || forceRebuild) {
+          cancelAnimLoop();
+          isFlipping = false;
+          boardWrapper.classList.add("fading");
+          clearTimeout(rebuildTimeout);
+          rebuildTimeout = setTimeout(() => {
+            currentChars = blankGrid();
+            currentMsgIdx = -1;
+            renderBoard();
+            dynamicCSS.textContent = buildDynamicCSS();
+            if (S.autoFit) applyAutoFit();
+            requestAnimationFrame(() => {
+              boardWrapper.classList.remove("fading");
+            });
+          }, 250);
+          lastStructKey = sk;
+        } else {
+          dynamicCSS.textContent = buildDynamicCSS();
+          if (S.autoFit) requestAnimationFrame(applyAutoFit);
+        }
+      }
+      function applyAutoFit() {
+        if (!S.autoFit) return;
+        const grid = boardWrapper.querySelector(".vestaboard-grid");
+        if (!grid) return;
+        boardWrapper.style.transform = "none";
+        boardWrapper.style.width = "";
+        boardWrapper.style.height = "";
+        requestAnimationFrame(() => {
+          const bw = grid.offsetWidth,
+            bh = grid.offsetHeight;
+          if (!bw || !bh) return;
+          const rect = boardArea.getBoundingClientRect();
+          const fr = Math.min((rect.width - 32) / bw, (rect.height - 32) / bh);
+          boardWrapper.style.width = bw + "px";
+          boardWrapper.style.height = bh + "px";
+          boardWrapper.style.transform = `scale(${Math.min(fr, 2)})`;
+        });
+      }
+      window.addEventListener("resize", () => {
+        if (S.autoFit) requestAnimationFrame(applyAutoFit);
+      });
+
+      // ═══════════════════════════════════
+      // QR CODE
+      // ═══════════════════════════════════
+      function generateQR(url) {
+        const container = document.getElementById("qr-container");
+        container.innerHTML = "";
+        const qr = qrcode(0, "M");
+        qr.addData(url);
+        qr.make();
+        const size = 200,
+          mods = qr.getModuleCount(),
+          cellSize = size / mods;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = "#000";
+        for (let r = 0; r < mods; r++)
+          for (let c = 0; c < mods; c++) {
+            if (qr.isDark(r, c))
+              ctx.fillRect(
+                c * cellSize,
+                r * cellSize,
+                cellSize + 0.5,
+                cellSize + 0.5,
+              );
+          }
+        container.appendChild(canvas);
+      }
+
+      // ═══════════════════════════════════
+      // PAIRING / APPROVAL / LOCK
+      // ═══════════════════════════════════
+      function hideStatusBar() {
+        document.getElementById("status-bar").classList.add("hidden");
+        document.getElementById("show-bar-dot").classList.add("visible");
+      }
+      function showStatusBar() {
+        document.getElementById("status-bar").classList.remove("hidden");
+        document.getElementById("show-bar-dot").classList.remove("visible");
+      }
+      function toggleManualCode() {
+        document.getElementById("manual-code-area").classList.toggle("show");
+      }
+
+      function setCompanionState(on) {
+        companionConnected = on;
+        isLocked = on;
+        document.getElementById("pwr-btn").classList.toggle("inactive", !on);
+        const dot = document.getElementById("ws-dot"),
+          lbl = document.getElementById("ws-label");
+        if (on) {
+          lbl.textContent = "Companion connected";
+          lbl.style.color = "#22c55e";
+          dot.className = "sb-dot live";
+        } else {
+          lbl.textContent = "No companion";
+          lbl.style.color = "#555";
+          dot.className = "sb-dot";
+        }
+      }
+
+      function showPairScreen(code, secret) {
+        const url = `${location.origin}/companion.html#${code}.${secret}`;
+        generateQR(url);
+        document.getElementById("display-code").textContent = code;
+        document.getElementById("companion-url").textContent =
+          location.origin + "/companion.html";
+        pairOverlay.classList.remove("hidden");
+      }
+      function hidePairScreen() {
+        pairOverlay.classList.add("hidden");
+      }
+
+      function showApproval() {
+        pendingApproval = true;
+        approvalOverlay.classList.add("show");
+      }
+      function hideApproval() {
+        pendingApproval = false;
+        approvalOverlay.classList.remove("show");
+      }
+
+      function approvePair() {
+        if (!ws || ws.readyState !== 1) return;
+        ws.send(JSON.stringify({ type: "approve_pair" }));
+        hideApproval();
+      }
+      function rejectPair() {
+        if (!ws || ws.readyState !== 1) return;
+        ws.send(JSON.stringify({ type: "reject_pair" }));
+        hideApproval();
+      }
+
+      function kickCompanion() {
+        if (!companionConnected || !ws || ws.readyState !== 1) return;
+        ws.send(JSON.stringify({ type: "kick_companion" }));
+      }
+
+      // ═══════════════════════════════════
+      // WEBSOCKET
+      // ═══════════════════════════════════
+      let ws = null,
+        boardId = null,
+        boardSecret = null,
+        reconnectTimer = null;
+
+      function connectWS() {
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${location.host}`);
+        ws.onopen = () => {
+          document.getElementById("ws-dot").className = "sb-dot live";
+          if (boardId) {
+            ws.send(JSON.stringify({ type: "reconnect_board", boardId }));
+          } else {
+            ws.send(JSON.stringify({ type: "register_board" }));
+          }
+        };
+        ws.onmessage = (e) => {
+          let msg;
+          try {
+            msg = JSON.parse(e.data);
+          } catch (_) {
+            return;
+          }
+          switch (msg.type) {
+            case "registered":
+              boardId = msg.boardId;
+              boardSecret = msg.secret;
+              showPairScreen(boardId, boardSecret);
+              setCompanionState(false);
+              break;
+            case "reconnected":
+              boardId = msg.boardId;
+              boardSecret = msg.secret || boardSecret;
+              if (msg.settings) Object.assign(S, msg.settings);
+              if (msg.messages) messagesText = msg.messages;
+              if (msg.mode) boardMode = msg.mode;
+              applySettings(true);
+              if (msg.locked) {
+                setCompanionState(true);
+                hidePairScreen();
+              } else {
+                setCompanionState(false);
+                showPairScreen(boardId, boardSecret);
+              }
+              break;
+            case "pair_request":
+              showApproval();
+              break;
+            case "pair_rejected":
+              hideApproval();
+              break;
+            case "companion_joined":
+              setCompanionState(true);
+              hidePairScreen();
+              hideApproval();
+              getAudioCtx();
+              const pm =
+                S.rows >= 3
+                  ? "\n🟩  DEVICE  PAIRED!  🟩"
+                  : "🟩 DEVICE PAIRED! 🟩";
+              flipSystemMessage(pm);
+              break;
+            case "companion_disconnected":
+              setCompanionState(false);
+              flipSystemMessage("\nDISCONNECTED");
+              break;
+            case "companion_disconnected_new_code":
+              setCompanionState(false);
+              boardId = msg.boardId;
+              boardSecret = msg.secret;
+              flipSystemMessage("\nDISCONNECTED");
+              setTimeout(() => {
+                showPairScreen(boardId, boardSecret);
+              }, 2500);
+              break;
+            case "new_code":
+              boardId = msg.boardId;
+              boardSecret = msg.secret;
+              showPairScreen(boardId, boardSecret);
+              setCompanionState(false);
+              break;
+            case "update_settings":
+              if (msg.settings && typeof msg.settings === "object") {
+                Object.assign(S, msg.settings);
+                applySettings();
+              }
+              break;
+            case "update_messages":
+              if (typeof msg.messages === "string") messagesText = msg.messages;
+              break;
+            case "play_sequence":
+              playSequence();
+              break;
+            case "next_message":
+              flipToNext();
+              break;
+            case "reset_board":
+              resetBoard();
+              break;
+            case "set_mode":
+              if (msg.mode === "clock") startClock();
+              else {
+                stopClock();
+                boardMode = "messages";
+              }
+              break;
+            case "flip_message":
+              if (typeof msg.text === "string")
+                flipToTarget(messageToGrid(msg.text.toUpperCase()));
+              break;
+          }
+        };
+        ws.onclose = () => {
+          document.getElementById("ws-dot").className = "sb-dot warn";
+          document.getElementById("ws-label").textContent = "Reconnecting...";
+          document.getElementById("ws-label").style.color = "#eab308";
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connectWS, 3000);
+        };
+        ws.onerror = () => {
+          ws.close();
+        };
+      }
+
+      // ═══════════════════════════════════
+      // KEYBOARD
+      // ═══════════════════════════════════
+      document.addEventListener("keydown", (e) => {
+        // Approval gate shortcuts
+        if (pendingApproval) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            approvePair();
+          }
+          if (e.key === "Escape") rejectPair();
+          return;
+        }
+        if (e.key.toLowerCase() === "f") {
+          if (!document.fullscreenElement)
+            document.documentElement.requestFullscreen().catch(() => {});
+          else document.exitFullscreen();
+        }
+        if (e.key.toLowerCase() === "m") {
+          S.soundVolume = S.soundVolume > 0 ? 0 : 0.8;
+        }
+        if (e.key.toLowerCase() === "h") {
+          const sb = document.getElementById("status-bar");
+          if (sb.classList.contains("hidden")) showStatusBar();
+          else hideStatusBar();
+        }
+      });
+      document.addEventListener(
+        "click",
+        () => {
+          getAudioCtx();
+        },
+        { once: true },
+      );
+
+      renderBoard();
+      applySettings(true);
+      loadClickWav();
+      connectWS();
+    </script>
+  </body>
+</html>

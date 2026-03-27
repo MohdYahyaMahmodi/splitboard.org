@@ -1,0 +1,2144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <title>splitflap.org — Remote</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+      :root {
+        --bg: #09090b;
+        --card: #111114;
+        --border: #1e1e24;
+        --text: #8a8a96;
+        --text2: #555560;
+        --white: #ededf0;
+        --accent: #d4d4dc;
+        --green: #22c55e;
+        --red: #ef4444;
+        --r: 12px;
+      }
+      html,
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Inter", system-ui, sans-serif;
+        font-size: 14px;
+        height: 100%;
+        overflow: hidden;
+      }
+      button {
+        font-family: inherit;
+        cursor: pointer;
+        border: none;
+        outline: none;
+      }
+      input,
+      textarea,
+      select {
+        font-family: inherit;
+        outline: none;
+      }
+
+      /* PAIR */
+      #pair-screen {
+        position: fixed;
+        inset: 0;
+        background: var(--bg);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        transition:
+          opacity 0.4s,
+          transform 0.4s;
+      }
+      #pair-screen.hidden {
+        opacity: 0;
+        transform: translateY(20px);
+        pointer-events: none;
+      }
+      #pair-screen h1 {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--white);
+        margin-bottom: 4px;
+      }
+      #pair-screen .subtitle {
+        font-size: 12px;
+        color: var(--text2);
+        margin-bottom: 24px;
+        text-align: center;
+        line-height: 1.6;
+        max-width: 280px;
+      }
+      .pair-logo {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--white);
+        margin-bottom: 28px;
+        letter-spacing: -0.3px;
+      }
+      .pair-logo span {
+        color: var(--green);
+      }
+      .pair-section {
+        width: 100%;
+        max-width: 300px;
+        margin-bottom: 16px;
+      }
+      .pair-section-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text2);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+      }
+      .code-inputs {
+        display: flex;
+        gap: 7px;
+      }
+      .code-inputs input {
+        flex: 1;
+        height: 54px;
+        background: var(--card);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        text-align: center;
+        font-family: "Roboto Mono", monospace;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--white);
+        caret-color: var(--green);
+        transition: border-color 0.2s;
+        min-width: 0;
+      }
+      .code-inputs input:focus {
+        border-color: var(--accent);
+      }
+      #pair-btn {
+        width: 100%;
+        max-width: 300px;
+        padding: 14px;
+        background: var(--white);
+        color: #000;
+        font-size: 14px;
+        font-weight: 600;
+        border-radius: 10px;
+        transition: opacity 0.15s;
+        margin-top: 4px;
+      }
+      #pair-btn:active {
+        opacity: 0.8;
+      }
+      #pair-btn:disabled {
+        opacity: 0.4;
+      }
+      #pair-error {
+        font-size: 12px;
+        color: var(--red);
+        margin-top: 10px;
+        min-height: 18px;
+        text-align: center;
+      }
+      #pair-waiting {
+        font-size: 12px;
+        color: #eab308;
+        margin-top: 10px;
+        min-height: 18px;
+        text-align: center;
+        display: none;
+      }
+      .or-divider {
+        font-size: 10px;
+        color: #333;
+        margin: 12px 0;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      /* APP */
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+      #app.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .top-bar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--card);
+      }
+      .top-bar .left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .top-bar .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+      }
+      .top-bar .dot.off {
+        background: var(--red);
+        box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+      }
+      .top-bar .code {
+        font-family: "Roboto Mono", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--white);
+        letter-spacing: 2px;
+      }
+      .dc-btn {
+        padding: 5px 10px;
+        font-size: 10px;
+        font-weight: 600;
+        border-radius: 6px;
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        transition: all 0.15s;
+      }
+      .dc-btn:active {
+        opacity: 0.7;
+      }
+      .scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 12px 140px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Mini board */
+      .mini-board {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        padding: 12px;
+        margin-bottom: 6px;
+      }
+      .mini-board-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text2);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .mini-board-label .info {
+        font-family: "Roboto Mono", monospace;
+        color: var(--accent);
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .mini-grid {
+        display: grid;
+        gap: 1px;
+        background: #0a0a0c;
+        border-radius: 4px;
+        padding: 4px;
+        overflow-x: auto;
+      }
+      .mini-cell {
+        aspect-ratio: 1/1.3;
+        border-radius: 2px;
+        background: #151518;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Roboto Mono", monospace;
+        font-size: 7px;
+        font-weight: 700;
+        color: #555;
+        min-width: 0;
+        overflow: hidden;
+        transition: background 0.15s;
+      }
+      .mini-cell.has-char {
+        color: #999;
+      }
+      .mini-cell.is-color {
+        border: none;
+      }
+      .row-counter {
+        display: flex;
+        gap: 4px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      .row-counter span {
+        font-size: 9px;
+        font-family: "Roboto Mono", monospace;
+        color: var(--text2);
+        background: var(--bg);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .row-counter span.over {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+      }
+
+      /* Sections */
+      .sec {
+        margin-bottom: 6px;
+        border-radius: var(--r);
+        overflow: hidden;
+        background: var(--card);
+        border: 1px solid var(--border);
+      }
+      .sec-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .sec-head h3 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--white);
+      }
+      .sec-head .chev {
+        color: var(--text2);
+        font-size: 10px;
+        transition: transform 0.2s;
+      }
+      .sec.open .chev {
+        transform: rotate(90deg);
+      }
+      .sec-body {
+        display: none;
+        padding: 4px 16px 16px;
+      }
+      .sec.open .sec-body {
+        display: block;
+      }
+
+      /* Message cards */
+      .msg-card {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+        position: relative;
+      }
+      .msg-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .msg-card-num {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text2);
+        font-family: "Roboto Mono", monospace;
+      }
+      .msg-card-del {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        background: transparent;
+        border: 1px solid transparent;
+        color: #555;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.15s;
+      }
+      .msg-card-del:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+      .msg-card textarea {
+        width: 100%;
+        background: transparent;
+        color: var(--white);
+        border: none;
+        font-family: "Roboto Mono", monospace;
+        font-size: 11px;
+        resize: none;
+        line-height: 1.5;
+        min-height: 60px;
+        padding: 0;
+      }
+      .msg-card textarea:focus {
+        outline: none;
+      }
+      .msg-add-btn {
+        width: 100%;
+        padding: 10px;
+        background: transparent;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        color: var(--text2);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .msg-add-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* Fields */
+      .field {
+        margin-bottom: 14px;
+      }
+      .field:last-child {
+        margin-bottom: 0;
+      }
+      .field-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .field-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text2);
+      }
+      .field-val {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        font-family: "Roboto Mono", monospace;
+      }
+      input[type="range"] {
+        width: 100%;
+        -webkit-appearance: none;
+        background: var(--bg);
+        height: 4px;
+        border-radius: 2px;
+        margin: 0;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      input[type="color"] {
+        -webkit-appearance: none;
+        border: 1px solid var(--border);
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        cursor: pointer;
+        background: transparent;
+        padding: 0;
+        flex-shrink: 0;
+      }
+      input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 2px;
+      }
+      input[type="color"]::-webkit-color-swatch {
+        border: none;
+        border-radius: 4px;
+      }
+      select {
+        width: 100%;
+        background: var(--bg);
+        color: var(--white);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .text-input {
+        width: 100%;
+        background: var(--bg);
+        color: var(--white);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        font-family: "Roboto Mono", monospace;
+        font-size: 11px;
+      }
+      .text-input:focus {
+        border-color: var(--accent);
+      }
+      .color-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .color-row .field-label {
+        flex: 1;
+      }
+      .color-row .arrow {
+        color: var(--text2);
+        font-size: 10px;
+      }
+      .hint {
+        font-size: 10px;
+        color: #3a3a44;
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+      .color-blocks {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .color-block {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        transition: transform 0.12s;
+      }
+      .color-block:active {
+        transform: scale(1.15);
+      }
+      .btn {
+        padding: 10px 16px;
+        font-size: 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: opacity 0.12s;
+      }
+      .btn:active {
+        opacity: 0.7;
+      }
+      .btn-green {
+        background: #1a6b28;
+        color: #cde6d0;
+      }
+      .btn-orange {
+        background: #7a5010;
+        color: #f0d8a8;
+      }
+      .btn-red {
+        background: #6b1e1e;
+        color: #f0c8c8;
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .toggle {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+      .toggle-track {
+        position: absolute;
+        inset: 0;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .toggle-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        background: var(--text2);
+        border-radius: 50%;
+        transition: all 0.2s;
+        pointer-events: none;
+      }
+      .toggle input:checked + .toggle-track {
+        background: var(--green);
+        border-color: var(--green);
+      }
+      .toggle input:checked + .toggle-track .toggle-knob {
+        left: 21px;
+        background: #fff;
+      }
+      .mode-bar {
+        display: flex;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--bg);
+      }
+      .mode-bar button {
+        flex: 1;
+        padding: 10px;
+        background: transparent;
+        color: var(--text2);
+        font-size: 11px;
+        font-weight: 600;
+        border-right: 1px solid var(--border);
+        font-family: "Inter", sans-serif;
+      }
+      .mode-bar button:last-child {
+        border-right: none;
+      }
+      .mode-bar button.active {
+        background: var(--accent);
+        color: #000;
+      }
+      .bottom-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        padding: 12px 14px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+        display: flex;
+        gap: 8px;
+        z-index: 50;
+      }
+      .bottom-bar button {
+        flex: 1;
+        padding: 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- PAIR -->
+    <div id="pair-screen">
+      <div class="pair-logo">splitflap<span>.</span>org</div>
+      <h1>Connect to Board</h1>
+      <p class="subtitle">
+        Scan the QR code on your TV, or enter the 6-digit code manually.
+      </p>
+      <div class="pair-section">
+        <div class="pair-section-label">Board Code</div>
+        <div class="code-inputs" id="code-inputs">
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+        </div>
+      </div>
+      <button id="pair-btn" disabled>Connect</button>
+      <div id="pair-error"></div>
+      <div id="pair-waiting">⏳ Waiting for TV to approve...</div>
+    </div>
+
+    <!-- APP -->
+    <div id="app">
+      <div class="top-bar">
+        <div class="left">
+          <div class="dot" id="app-dot"></div>
+          <span class="code" id="app-code">------</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span style="font-size: 10px; color: var(--text2); font-weight: 600"
+            >remote</span
+          >
+          <button class="dc-btn" onclick="disconnectFromBoard()">
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <div class="mini-board">
+          <div class="mini-board-label">
+            <span>Board Preview</span
+            ><span class="info" id="board-info">22×5 · 1 msg</span>
+          </div>
+          <div class="mini-grid" id="mini-grid"></div>
+          <div class="row-counter" id="row-counter"></div>
+        </div>
+
+        <div class="sec open" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Display Mode</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="mode-bar" id="mode-bar">
+              <button class="active" onclick="setMode('messages')">
+                Messages</button
+              ><button onclick="setMode('clock')">Clock</button>
+            </div>
+            <div class="hint" style="margin-top: 8px">
+              Clock shows live time/date on the board.
+            </div>
+          </div>
+        </div>
+
+        <div class="sec open" id="sec-messages" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Messages</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="hint" style="margin-bottom: 10px">
+              Each card is one message. Color emojis: 🟥🟧🟨🟩🟦🟪⬜
+            </div>
+            <div id="msg-cards"></div>
+            <button class="msg-add-btn" onclick="addMessageCard()">
+              + Add Message
+            </button>
+            <div
+              class="color-blocks"
+              id="color-insert-row"
+              style="margin-top: 12px"
+            ></div>
+          </div>
+        </div>
+
+        <div class="sec open" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Animation</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Intermediate Speed</span
+                ><span class="field-val" id="val-fastSpeed">25ms</span>
+              </div>
+              <input
+                type="range"
+                id="input-fastSpeed"
+                min="10"
+                max="80"
+                step="1"
+                value="25"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Final Flip Duration</span
+                ><span class="field-val" id="val-animDuration">360ms</span>
+              </div>
+              <input
+                type="range"
+                id="input-animDuration"
+                min="50"
+                max="1500"
+                step="10"
+                value="360"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Wave Stagger</span
+                ><span class="field-val" id="val-animStagger">40ms</span>
+              </div>
+              <input
+                type="range"
+                id="input-animStagger"
+                min="0"
+                max="300"
+                step="5"
+                value="40"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Message Delay</span
+                ><span class="field-val" id="val-msgDelay">6000ms</span>
+              </div>
+              <input
+                type="range"
+                id="input-msgDelay"
+                min="500"
+                max="15000"
+                step="100"
+                value="6000"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">3D Perspective</span
+                ><span class="field-val" id="val-animPerspective">3000px</span>
+              </div>
+              <input
+                type="range"
+                id="input-animPerspective"
+                min="200"
+                max="5000"
+                step="50"
+                value="3000"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Easing</span>
+              </div>
+              <select id="input-animEasing">
+                <option value="linear">Linear</option>
+                <option value="ease-in">Ease-In</option>
+                <option value="ease-out">Ease-Out</option>
+                <option value="ease-in-out" selected>Ease-In-Out</option>
+                <option value="cubic-bezier(0.175,0.885,0.32,1.275)">
+                  Bouncy
+                </option>
+                <option value="cubic-bezier(0.4,0,1,1)">Snappy</option>
+              </select>
+            </div>
+            <div class="toggle-row">
+              <span class="field-label">Loop Messages</span
+              ><label class="toggle"
+                ><input
+                  type="checkbox"
+                  id="input-loopSequence"
+                  checked
+                  onchange="
+                    S.loopSequence = this.checked;
+                    sendSettings();
+                  " />
+                <div class="toggle-track"><div class="toggle-knob"></div></div
+              ></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Sound</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Volume</span
+                ><span class="field-val" id="val-soundVolume">0.8</span>
+              </div>
+              <input
+                type="range"
+                id="input-soundVolume"
+                min="0"
+                max="1"
+                step="0.05"
+                value="0.8"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Pitch</span
+                ><span class="field-val" id="val-soundRate">1.5</span>
+              </div>
+              <input
+                type="range"
+                id="input-soundRate"
+                min="0.3"
+                max="3.0"
+                step="0.1"
+                value="1.5"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Board & Grid</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="toggle-row">
+              <span class="field-label">Auto Fit to Screen</span
+              ><label class="toggle"
+                ><input
+                  type="checkbox"
+                  id="input-autoFit"
+                  checked
+                  onchange="
+                    readUI();
+                    sendSettings();
+                  " />
+                <div class="toggle-track"><div class="toggle-knob"></div></div
+              ></label>
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Columns</span
+                ><span class="field-val" id="val-cols">22</span>
+              </div>
+              <input type="range" id="input-cols" min="1" max="30" value="22" />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Rows</span
+                ><span class="field-val" id="val-rows">5</span>
+              </div>
+              <input type="range" id="input-rows" min="1" max="10" value="5" />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Scale</span
+                ><span class="field-val" id="val-scale">0.22</span>
+              </div>
+              <input
+                type="range"
+                id="input-scale"
+                min="0.05"
+                max="1"
+                step="0.01"
+                value="0.22"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Grid Gap</span
+                ><span class="field-val" id="val-gridGap">11px</span>
+              </div>
+              <input
+                type="range"
+                id="input-gridGap"
+                min="0"
+                max="50"
+                step="1"
+                value="11"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Padding</span
+                ><span class="field-val" id="val-boardPad">13px</span>
+              </div>
+              <input
+                type="range"
+                id="input-boardPad"
+                min="0"
+                max="150"
+                step="1"
+                value="13"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Radius</span
+                ><span class="field-val" id="val-boardRadius">6px</span>
+              </div>
+              <input
+                type="range"
+                id="input-boardRadius"
+                min="0"
+                max="100"
+                step="1"
+                value="6"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Shadow</span
+                ><span class="field-val" id="val-boardShadow">0.4</span>
+              </div>
+              <input
+                type="range"
+                id="input-boardShadow"
+                min="0"
+                max="1"
+                step="0.05"
+                value="0.4"
+              />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Board Bg</span
+              ><input type="color" id="input-boardBg" value="#0f0f0f" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Preview Bg</span
+              ><input type="color" id="input-previewBg" value="#000000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Typography</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Font Family</span>
+              </div>
+              <input
+                type="text"
+                id="input-fontFamily"
+                class="text-input"
+                value="'Roboto Mono', monospace"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Size</span
+                ><span class="field-val" id="val-fontSize">247px</span>
+              </div>
+              <input
+                type="range"
+                id="input-fontSize"
+                min="50"
+                max="400"
+                step="1"
+                value="247"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Weight</span
+                ><span class="field-val" id="val-fontWeight">300</span>
+              </div>
+              <input
+                type="range"
+                id="input-fontWeight"
+                min="100"
+                max="900"
+                step="100"
+                value="300"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">X Offset</span
+                ><span class="field-val" id="val-fontX">0px</span>
+              </div>
+              <input
+                type="range"
+                id="input-fontX"
+                min="-100"
+                max="100"
+                step="1"
+                value="0"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Y Offset</span
+                ><span class="field-val" id="val-fontY">-52px</span>
+              </div>
+              <input
+                type="range"
+                id="input-fontY"
+                min="-100"
+                max="100"
+                step="1"
+                value="-52"
+              />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Color</span
+              ><input type="color" id="input-fontColor" value="#ffffff" />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Flap Shape</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Width</span
+                ><span class="field-val" id="val-width">250px</span>
+              </div>
+              <input
+                type="range"
+                id="input-width"
+                min="120"
+                max="350"
+                value="250"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Height</span
+                ><span class="field-val" id="val-height">540px</span>
+              </div>
+              <input
+                type="range"
+                id="input-height"
+                min="200"
+                max="600"
+                value="540"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Split</span
+                ><span class="field-val" id="val-split">194px</span>
+              </div>
+              <input
+                type="range"
+                id="input-split"
+                min="60"
+                max="300"
+                value="194"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Pinch</span
+                ><span class="field-val" id="val-pinch">14px</span>
+              </div>
+              <input
+                type="range"
+                id="input-pinch"
+                min="0"
+                max="40"
+                value="14"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Pinch Height</span
+                ><span class="field-val" id="val-pinchHeight">54px</span>
+              </div>
+              <input
+                type="range"
+                id="input-pinchHeight"
+                min="0"
+                max="100"
+                value="54"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Pinch Slope</span
+                ><span class="field-val" id="val-pinchSlope">7px</span>
+              </div>
+              <input
+                type="range"
+                id="input-pinchSlope"
+                min="0"
+                max="50"
+                value="7"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Outer Radius</span
+                ><span class="field-val" id="val-outerRadius">30px</span>
+              </div>
+              <input
+                type="range"
+                id="input-outerRadius"
+                min="0"
+                max="50"
+                value="30"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Bezel Radius</span
+                ><span class="field-val" id="val-bezelRadius">30px</span>
+              </div>
+              <input
+                type="range"
+                id="input-bezelRadius"
+                min="0"
+                max="50"
+                value="30"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Hole Radius</span
+                ><span class="field-val" id="val-radius">24px</span>
+              </div>
+              <input
+                type="range"
+                id="input-radius"
+                min="0"
+                max="30"
+                value="24"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Thicknesses</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Bezel Margin</span
+                ><span class="field-val" id="val-padBezel">10px</span>
+              </div>
+              <input
+                type="range"
+                id="input-padBezel"
+                min="0"
+                max="50"
+                value="10"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Hole Padding</span
+                ><span class="field-val" id="val-padHole">24px</span>
+              </div>
+              <input
+                type="range"
+                id="input-padHole"
+                min="10"
+                max="100"
+                value="24"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Middle Gap</span
+                ><span class="field-val" id="val-gap">7px</span>
+              </div>
+              <input
+                type="range"
+                id="input-gap"
+                min="0"
+                max="20"
+                step="0.5"
+                value="7"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Highlight Inset</span
+                ><span class="field-val" id="val-highlightInset">0px</span>
+              </div>
+              <input
+                type="range"
+                id="input-highlightInset"
+                min="0"
+                max="10"
+                value="0"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Hole Stroke</span
+                ><span class="field-val" id="val-strokeW">0px</span>
+              </div>
+              <input
+                type="range"
+                id="input-strokeW"
+                min="0"
+                max="10"
+                step="0.5"
+                value="0"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Ridges</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Count</span
+                ><span class="field-val" id="val-ridgeCount">7</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeCount"
+                min="0"
+                max="15"
+                value="7"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Bottom Offset</span
+                ><span class="field-val" id="val-ridgeBottom">0px</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeBottom"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Side Margin</span
+                ><span class="field-val" id="val-ridgeMargin">0px</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeMargin"
+                min="-30"
+                max="50"
+                value="0"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Height</span
+                ><span class="field-val" id="val-ridgeHeight">7px</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeHeight"
+                min="2"
+                max="20"
+                value="7"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Gap</span
+                ><span class="field-val" id="val-ridgeGap">1px</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeGap"
+                min="0"
+                max="10"
+                value="1"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Corner Radius</span
+                ><span class="field-val" id="val-ridgeRadius">20px</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeRadius"
+                min="0"
+                max="20"
+                value="20"
+              />
+            </div>
+            <div class="field">
+              <div class="field-row">
+                <span class="field-label">Shadow</span
+                ><span class="field-val" id="val-ridgeShadow">0</span>
+              </div>
+              <input
+                type="range"
+                id="input-ridgeShadow"
+                min="0"
+                max="1"
+                step="0.05"
+                value="0"
+              />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Stop 1</span
+              ><input type="color" id="color-r1" value="#000000" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Stop 2</span
+              ><input type="color" id="color-r2" value="#000000" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Stop 3</span
+              ><input type="color" id="color-r3" value="#000000" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Stop 4</span
+              ><input type="color" id="color-r4" value="#000000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" data-sec>
+          <div class="sec-head" onclick="toggleSec(this)">
+            <h3>Flap Colors</h3>
+            <span class="chev">▶</span>
+          </div>
+          <div class="sec-body">
+            <div class="color-row">
+              <span class="field-label">Outer Plate</span
+              ><input type="color" id="color-bg" value="#0f0f0f" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Hole Stroke</span
+              ><input type="color" id="color-holeStroke" value="#000000" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Hole Bg</span
+              ><input type="color" id="color-holeBg" value="#040404" />
+            </div>
+            <hr
+              style="
+                border: 0;
+                border-top: 1px solid var(--border);
+                margin: 12px 0;
+              "
+            />
+            <div class="color-row">
+              <span class="field-label">Bezel</span
+              ><input type="color" id="grad-bezel1" value="#000000" /><span
+                class="arrow"
+                >→</span
+              ><input type="color" id="grad-bezel2" value="#000000" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Top Flap</span
+              ><input type="color" id="grad-top1" value="#0f0f0f" /><span
+                class="arrow"
+                >→</span
+              ><input type="color" id="grad-top2" value="#0f0f0f" />
+            </div>
+            <div class="color-row">
+              <span class="field-label">Bottom</span
+              ><input type="color" id="grad-bot1" value="#0f0f0f" /><input
+                type="color"
+                id="grad-bot2"
+                value="#0f0f0f"
+              /><input type="color" id="grad-bot3" value="#0f0f0f" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar" id="bottom-bar">
+        <button class="btn-green btn" onclick="sendCmd('play_sequence')">
+          ▶ Play
+        </button>
+        <button class="btn-orange btn" onclick="sendCmd('next_message')">
+          ⏭ Next
+        </button>
+        <button class="btn-red btn" onclick="sendCmd('reset_board')">
+          ⏹ Reset
+        </button>
+      </div>
+    </div>
+
+    <script>
+      const S = {
+        animDuration: 360,
+        animPerspective: 3000,
+        animStagger: 40,
+        animEasing: "ease-in-out",
+        msgDelay: 6000,
+        fastSpeed: 25,
+        loopSequence: true,
+        soundVolume: 0.8,
+        soundRate: 1.5,
+        cols: 22,
+        rows: 5,
+        scale: 0.22,
+        gridGap: 11,
+        fontFamily: "'Roboto Mono', monospace",
+        fontSize: 247,
+        fontWeight: 300,
+        fontX: 0,
+        fontY: -52,
+        fontColor: "#ffffff",
+        boardPad: 13,
+        boardShadow: 0.4,
+        boardRadius: 6,
+        boardBg: "#0f0f0f",
+        previewBg: "#000000",
+        width: 250,
+        height: 540,
+        split: 194,
+        pinch: 14,
+        pinchHeight: 54,
+        pinchSlope: 7,
+        outerRadius: 30,
+        bezelRadius: 30,
+        radius: 24,
+        shadow: 0,
+        padBezel: 10,
+        padHole: 24,
+        gap: 7,
+        highlightInset: 0,
+        strokeW: 0,
+        ridgeCount: 7,
+        ridgeHeight: 7,
+        ridgeGap: 1,
+        ridgeRadius: 20,
+        ridgeShadow: 0,
+        ridgeBottom: 0,
+        ridgeMargin: 0,
+        r1: "#000000",
+        r2: "#000000",
+        r3: "#000000",
+        r4: "#000000",
+        c_bg: "#0f0f0f",
+        c_holeStroke: "#000000",
+        c_holeBg: "#040404",
+        g_bezel1: "#000000",
+        g_bezel2: "#000000",
+        g_top1: "#0f0f0f",
+        g_top2: "#0f0f0f",
+        g_bot1: "#0f0f0f",
+        g_bot2: "#0f0f0f",
+        g_bot3: "#0f0f0f",
+        autoFit: true,
+      };
+      const COLOR_MAP = {
+        "🟥": "#e02424",
+        "🟧": "#f97316",
+        "🟨": "#eab308",
+        "🟩": "#16a34a",
+        "🟦": "#2563eb",
+        "🟪": "#9333ea",
+        "⬜": "#ffffff",
+      };
+      let ws = null,
+        boardId = null,
+        boardSecret = null,
+        paired = false,
+        currentMode = "messages";
+
+      // ── Messages ──
+      let messages = [
+        "  OPEN SOURCE  CODE   \n                      \n🟨  NO $3.5K HARDWARE 🟨\n🟥  NO $199 SOFTWARE  🟥\n🟩  FREE FOREVER      🟩",
+      ];
+      let activeMsgCard = 0;
+      function serializeMessages() {
+        return messages.join("\n---\n");
+      }
+      function deserializeMessages(str) {
+        if (!str) return;
+        messages = str
+          .split(/\n---\n|\n---$|^---\n/)
+          .filter((m) => m.length > 0);
+        if (!messages.length) messages = [""];
+        renderMessageCards();
+      }
+      function escapeHtml(s) {
+        return s
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function renderMessageCards() {
+        const c = document.getElementById("msg-cards");
+        c.innerHTML = "";
+        messages.forEach((msg, i) => {
+          const card = document.createElement("div");
+          card.className = "msg-card";
+          card.innerHTML = `<div class="msg-card-head"><span class="msg-card-num">MSG ${i + 1}</span>${messages.length > 1 ? `<div class="msg-card-del" onclick="deleteMessage(${i})">✕</div>` : ""}</div><textarea rows="5" data-msg-idx="${i}" oninput="onMsgEdit(${i},this.value)" onfocus="activeMsgCard=${i};updateMiniBoard()">${escapeHtml(msg)}</textarea>`;
+          c.appendChild(card);
+        });
+        updateMiniBoard();
+      }
+      function addMessageCard() {
+        messages.push("");
+        renderMessageCards();
+        const ta = document.querySelectorAll("#msg-cards textarea");
+        if (ta.length) ta[ta.length - 1].focus();
+        onMsgsChanged();
+      }
+      function deleteMessage(i) {
+        if (messages.length <= 1) return;
+        messages.splice(i, 1);
+        if (activeMsgCard >= messages.length)
+          activeMsgCard = messages.length - 1;
+        renderMessageCards();
+        onMsgsChanged();
+      }
+      function onMsgEdit(i, v) {
+        messages[i] = v;
+        onMsgsChanged();
+        updateMiniBoard();
+      }
+      function onMsgsChanged() {
+        clearTimeout(window._mt);
+        window._mt = setTimeout(
+          () =>
+            safeSend({
+              type: "update_messages",
+              messages: serializeMessages(),
+            }),
+          200,
+        );
+      }
+
+      let lastFocusedTA = null;
+      document.addEventListener("focusin", (e) => {
+        if (e.target.matches("#msg-cards textarea")) lastFocusedTA = e.target;
+      });
+      function renderColorBlocks() {
+        const row = document.getElementById("color-insert-row");
+        Object.entries(COLOR_MAP).forEach(([emoji, hex]) => {
+          const b = document.createElement("div");
+          b.className = "color-block";
+          b.style.backgroundColor = hex;
+          b.onclick = () => {
+            const ta = lastFocusedTA;
+            if (!ta) return;
+            const s = ta.selectionStart,
+              e = ta.selectionEnd;
+            ta.value = ta.value.substring(0, s) + emoji + ta.value.substring(e);
+            ta.selectionStart = ta.selectionEnd = s + emoji.length;
+            ta.focus();
+            const idx = parseInt(ta.dataset.msgIdx);
+            if (!isNaN(idx)) {
+              messages[idx] = ta.value;
+              onMsgsChanged();
+              updateMiniBoard();
+            }
+          };
+          row.appendChild(b);
+        });
+      }
+
+      // ── Mini board ──
+      function updateMiniBoard() {
+        const cols = S.cols,
+          rows = S.rows,
+          msg = messages[activeMsgCard] || "",
+          lines = msg.split("\n");
+        document.getElementById("board-info").textContent =
+          `${cols}×${rows} · ${messages.length} msg${messages.length !== 1 ? "s" : ""}`;
+        const grid = document.getElementById("mini-grid");
+        grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+        let html = "";
+        const rc = [];
+        for (let r = 0; r < rows; r++) {
+          const lc = Array.from(lines[r] || "");
+          let used = 0;
+          for (let c = 0; c < cols; c++) {
+            const ch = lc[c] || " ";
+            const isC = !!COLOR_MAP[ch],
+              filled = ch !== " ";
+            if (filled) used++;
+            if (isC)
+              html += `<div class="mini-cell is-color" style="background:${COLOR_MAP[ch]}"></div>`;
+            else if (filled)
+              html += `<div class="mini-cell has-char">${escapeHtml(ch)}</div>`;
+            else html += `<div class="mini-cell"></div>`;
+          }
+          rc.push({ used, total: cols, over: lc.length > cols });
+        }
+        grid.innerHTML = html;
+        document.getElementById("row-counter").innerHTML = rc
+          .map(
+            (r, i) =>
+              `<span class="${r.over ? "over" : ""}">R${i + 1}: ${r.used}/${r.total}${r.over ? " overflow" : ""}</span>`,
+          )
+          .join("");
+      }
+
+      // ── UI ──
+      function toggleSec(el) {
+        el.parentElement.classList.toggle("open");
+      }
+      function setMode(mode) {
+        currentMode = mode;
+        document
+          .getElementById("mode-bar")
+          .querySelectorAll("button")
+          .forEach((b, i) =>
+            b.classList.toggle("active", ["messages", "clock"][i] === mode),
+          );
+        document.getElementById("sec-messages").style.display =
+          mode === "messages" ? "" : "none";
+        document.getElementById("bottom-bar").style.display =
+          mode === "messages" ? "" : "none";
+        safeSend({ type: "set_mode", mode });
+      }
+
+      // ── Pairing ──
+      const codeInputs = document.querySelectorAll("#code-inputs input");
+      const pairBtn = document.getElementById("pair-btn");
+      const pairError = document.getElementById("pair-error");
+      const pairWaiting = document.getElementById("pair-waiting");
+
+      codeInputs.forEach((inp, i) => {
+        inp.addEventListener("input", () => {
+          inp.value = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (inp.value && i < 5) codeInputs[i + 1].focus();
+          checkReady();
+        });
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Backspace" && !inp.value && i > 0)
+            codeInputs[i - 1].focus();
+          if (e.key === "Enter") pairBtn.click();
+        });
+        inp.addEventListener("paste", (e) => {
+          e.preventDefault();
+          const t = (e.clipboardData.getData("text") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "")
+            .slice(0, 6);
+          t.split("").forEach((ch, j) => {
+            if (codeInputs[j]) codeInputs[j].value = ch;
+          });
+          checkReady();
+        });
+      });
+      function checkReady() {
+        pairBtn.disabled =
+          Array.from(codeInputs)
+            .map((i) => i.value)
+            .join("").length !== 6;
+      }
+
+      pairBtn.addEventListener("click", () => {
+        const code = Array.from(codeInputs)
+          .map((i) => i.value)
+          .join("");
+        if (code.length !== 6) return;
+        pairError.textContent = "";
+        pairBtn.disabled = true;
+        pairBtn.textContent = "Connecting...";
+        // Manual code path: no secret
+        connectAndPair(code, "");
+      });
+
+      // ── Check URL hash for QR auto-pair ──
+      function checkQRHash() {
+        const hash = location.hash.slice(1);
+        if (!hash || !hash.includes(".")) return false;
+        const [code, secret] = hash.split(".");
+        if (code.length !== 6 || secret.length !== 32) return false;
+        // Clear hash so it's not visible
+        history.replaceState(null, "", location.pathname);
+        pairBtn.disabled = true;
+        pairBtn.textContent = "Connecting via QR...";
+        connectAndPair(code.toUpperCase(), secret.toLowerCase());
+        return true;
+      }
+
+      // ── Disconnect ──
+      function disconnectFromBoard() {
+        if (ws && ws.readyState === 1)
+          safeSend({ type: "companion_disconnect" });
+        paired = false;
+        boardId = null;
+        boardSecret = null;
+        document.getElementById("app").classList.remove("active");
+        document.getElementById("pair-screen").classList.remove("hidden");
+        pairBtn.disabled = false;
+        pairBtn.textContent = "Connect";
+        pairWaiting.style.display = "none";
+        codeInputs.forEach((i) => {
+          i.value = "";
+        });
+        codeInputs[0].focus();
+        if (ws)
+          try {
+            ws.close();
+          } catch (_) {}
+        ws = null;
+      }
+
+      // ── WebSocket ──
+      function connectAndPair(code, secret) {
+        if (ws)
+          try {
+            ws.close();
+          } catch (_) {}
+        boardSecret = secret || null;
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${location.host}`);
+        ws.onopen = () => {
+          ws.send(
+            JSON.stringify({
+              type: "pair",
+              boardId: code,
+              secret: secret || "",
+            }),
+          );
+        };
+        ws.onmessage = handleWsMsg;
+        ws.onclose = () => {
+          if (paired) {
+            document.getElementById("app-dot").className = "dot off";
+            setTimeout(() => {
+              if (paired) reconnect();
+            }, 3000);
+          } else if (!paired) {
+            pairError.textContent = "Connection lost.";
+            pairBtn.disabled = false;
+            pairBtn.textContent = "Connect";
+            pairWaiting.style.display = "none";
+          }
+        };
+        ws.onerror = () => {
+          ws.close();
+        };
+      }
+
+      function handleWsMsg(e) {
+        let msg;
+        try {
+          msg = JSON.parse(e.data);
+        } catch (_) {
+          return;
+        }
+        switch (msg.type) {
+          case "paired":
+            boardId = msg.boardId;
+            paired = true;
+            if (msg.settings) Object.assign(S, msg.settings);
+            if (msg.messages) deserializeMessages(msg.messages);
+            if (msg.mode) currentMode = msg.mode;
+            syncUI();
+            setMode(currentMode);
+            updateMiniBoard();
+            document.getElementById("pair-screen").classList.add("hidden");
+            document.getElementById("app").classList.add("active");
+            document.getElementById("app-code").textContent = boardId;
+            document.getElementById("app-dot").className = "dot";
+            pairWaiting.style.display = "none";
+            break;
+          case "waiting_approval":
+            pairWaiting.style.display = "block";
+            pairWaiting.textContent = "⏳ " + msg.message;
+            pairBtn.disabled = true;
+            pairBtn.textContent = "Waiting...";
+            break;
+          case "error":
+            pairError.textContent = msg.message || "Failed";
+            pairBtn.disabled = false;
+            pairBtn.textContent = "Connect";
+            pairWaiting.style.display = "none";
+            break;
+          case "board_disconnected":
+            document.getElementById("app-dot").className = "dot off";
+            break;
+          case "board_reconnected":
+            document.getElementById("app-dot").className = "dot";
+            sendSettings();
+            safeSend({
+              type: "update_messages",
+              messages: serializeMessages(),
+            });
+            break;
+          case "replaced":
+            alert("Another device took over.");
+            disconnectFromBoard();
+            break;
+          case "kicked":
+            alert("Board disconnected you.");
+            disconnectFromBoard();
+            break;
+        }
+      }
+
+      function reconnect() {
+        if (!boardId) return;
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${location.host}`);
+        ws.onopen = () => {
+          ws.send(
+            JSON.stringify({
+              type: "pair",
+              boardId,
+              secret: boardSecret || "",
+            }),
+          );
+        };
+        ws.onmessage = handleWsMsg;
+        ws.onclose = () => {
+          if (paired) setTimeout(reconnect, 3000);
+        };
+        ws.onerror = () => {
+          ws.close();
+        };
+      }
+
+      function safeSend(o) {
+        if (ws && ws.readyState === 1)
+          try {
+            ws.send(JSON.stringify(o));
+          } catch (_) {}
+      }
+      function sendCmd(t) {
+        safeSend({ type: t });
+      }
+
+      // ── State sync ──
+      let sT = null;
+      function sendSettings() {
+        clearTimeout(sT);
+        sT = setTimeout(() => {
+          readUI();
+          safeSend({ type: "update_settings", settings: { ...S } });
+        }, 50);
+      }
+
+      function readUI() {
+        S.fontFamily = document.getElementById("input-fontFamily").value;
+        S.animEasing = document.getElementById("input-animEasing").value;
+        S.autoFit = document.getElementById("input-autoFit").checked;
+        S.loopSequence = document.getElementById("input-loopSequence").checked;
+        [
+          "cols",
+          "rows",
+          "scale",
+          "gridGap",
+          "fontSize",
+          "fontWeight",
+          "fontX",
+          "fontY",
+          "boardPad",
+          "boardShadow",
+          "boardRadius",
+          "width",
+          "height",
+          "split",
+          "gap",
+          "pinch",
+          "pinchHeight",
+          "pinchSlope",
+          "outerRadius",
+          "bezelRadius",
+          "radius",
+          "padBezel",
+          "padHole",
+          "highlightInset",
+          "strokeW",
+          "ridgeCount",
+          "ridgeHeight",
+          "ridgeGap",
+          "ridgeRadius",
+          "ridgeShadow",
+          "ridgeBottom",
+          "ridgeMargin",
+          "animDuration",
+          "animPerspective",
+          "animStagger",
+          "soundVolume",
+          "soundRate",
+          "msgDelay",
+          "fastSpeed",
+        ].forEach((k) => {
+          const el = document.getElementById("input-" + k);
+          if (el) S[k] = parseFloat(el.value);
+        });
+        const cm = {
+          fontColor: "input-fontColor",
+          boardBg: "input-boardBg",
+          previewBg: "input-previewBg",
+          c_bg: "color-bg",
+          c_holeStroke: "color-holeStroke",
+          c_holeBg: "color-holeBg",
+          g_bezel1: "grad-bezel1",
+          g_bezel2: "grad-bezel2",
+          g_top1: "grad-top1",
+          g_top2: "grad-top2",
+          g_bot1: "grad-bot1",
+          g_bot2: "grad-bot2",
+          g_bot3: "grad-bot3",
+          r1: "color-r1",
+          r2: "color-r2",
+          r3: "color-r3",
+          r4: "color-r4",
+        };
+        Object.entries(cm).forEach(([k, id]) => {
+          const el = document.getElementById(id);
+          if (el) S[k] = el.value;
+        });
+      }
+
+      function updateLabels() {
+        const noU = [
+          "scale",
+          "boardShadow",
+          "shadow",
+          "ridgeShadow",
+          "fontWeight",
+          "cols",
+          "rows",
+          "soundVolume",
+          "soundRate",
+        ];
+        const msU = ["animDuration", "animStagger", "msgDelay", "fastSpeed"];
+        [
+          "cols",
+          "rows",
+          "scale",
+          "gridGap",
+          "fontSize",
+          "fontWeight",
+          "fontX",
+          "fontY",
+          "boardPad",
+          "boardShadow",
+          "boardRadius",
+          "width",
+          "height",
+          "split",
+          "gap",
+          "pinch",
+          "pinchHeight",
+          "pinchSlope",
+          "outerRadius",
+          "bezelRadius",
+          "radius",
+          "padBezel",
+          "padHole",
+          "highlightInset",
+          "strokeW",
+          "ridgeCount",
+          "ridgeHeight",
+          "ridgeGap",
+          "ridgeRadius",
+          "ridgeShadow",
+          "ridgeBottom",
+          "ridgeMargin",
+          "animDuration",
+          "animPerspective",
+          "animStagger",
+          "soundVolume",
+          "soundRate",
+          "msgDelay",
+          "fastSpeed",
+        ].forEach((k) => {
+          const el = document.getElementById("val-" + k);
+          if (!el) return;
+          el.textContent =
+            S[k] + (noU.includes(k) ? "" : msU.includes(k) ? "ms" : "px");
+        });
+      }
+
+      function syncUI() {
+        Object.keys(S).forEach((k) => {
+          const el =
+            document.getElementById("input-" + k) ||
+            document.getElementById("color-" + k) ||
+            document.getElementById("grad-" + k);
+          if (el) {
+            if (el.type === "checkbox") el.checked = S[k];
+            else if (typeof S[k] !== "object") el.value = S[k];
+          }
+        });
+        document.getElementById("input-loopSequence").checked = S.loopSequence;
+        updateLabels();
+        renderMessageCards();
+      }
+
+      // ── Events ──
+      document
+        .querySelectorAll("input[type=range],input[type=color],select")
+        .forEach((el) => {
+          const h = () => {
+            readUI();
+            updateLabels();
+            sendSettings();
+            updateMiniBoard();
+          };
+          el.addEventListener("input", h);
+          el.addEventListener("change", h);
+        });
+      document.querySelectorAll("#app input[type=text]").forEach((el) => {
+        el.addEventListener("input", () => {
+          clearTimeout(window._td);
+          window._td = setTimeout(() => {
+            readUI();
+            sendSettings();
+          }, 200);
+        });
+      });
+
+      // ── Init ──
+      renderColorBlocks();
+      renderMessageCards();
+      updateLabels();
+      // Try QR auto-pair from hash, else show manual entry
+      if (!checkQRHash()) codeInputs[0].focus();
+    </script>
+  </body>
+</html>
