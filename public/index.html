@@ -652,12 +652,27 @@
             >Self-host via Node.js</a
           >
         </p>
+        <div
+          id="live-count"
+          class="mt-4 flex items-center gap-2 text-sm text-gray-400 font-medium"
+          style="opacity: 0; transition: opacity 0.5s"
+        >
+          <span class="relative flex h-2 w-2">
+            <span
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+            ></span>
+            <span
+              class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
+            ></span>
+          </span>
+          <span id="board-count-text"></span>
+        </div>
       </div>
 
       <!-- THE BOARD -->
       <div
         id="board-container"
-        class="mt-16 md:mt-24 w-full relative z-10 reveal reveal-delay-2"
+        class="mt-4 md:mt-4 w-full relative z-10 reveal reveal-delay-2"
       >
         <div
           id="vestaboard-wrapper"
@@ -1659,6 +1674,19 @@
       window.addEventListener("DOMContentLoaded", () => {
         renderBoard();
         setTimeout(() => playSequence(), 1000);
+        fetch("/api/health")
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.boards > 0) {
+              document.getElementById("board-count-text").textContent =
+                d.boards +
+                " board" +
+                (d.boards !== 1 ? "s" : "") +
+                " live right now";
+              document.getElementById("live-count").style.opacity = "1";
+            }
+          })
+          .catch(() => {});
       });
     </script>
   </body>
