@@ -28,40 +28,49 @@
 
 ## What is this
 
-splitflap.org turns any screen into a retro mechanical split-flap display — the kind you'd see at train stations and airports. Open `board.html` on a TV or monitor, scan the QR code with your phone, and you have a fully controllable display with authentic animation and sound.
+A split-flap display that runs in a browser. The kind you used to see at train stations and airports. Open `board.html` on a TV, scan the QR code with your phone, and your phone becomes the wireless remote.
 
-The entire system is four files: a Node.js server, a board display, a phone companion, and a standalone design tool. No build step, no frameworks, no external APIs.
+Four files. One Node.js server, a board page, a phone companion, and a standalone design tool. No build step, no frameworks, no external APIs.
 
 ## Features
 
 ### Display Engine
 
-- **Sequential spool cycling** — each character module cycles through the alphabet in order (A→B→C→...→target), matching how real Solari boards work. No random scrambling.
-- **Single rAF animation loop** — one `requestAnimationFrame` loop processes a sorted action queue instead of spawning thousands of `setTimeout` calls. A 22×5 board with full transitions generates ~3,000 scheduled actions processed by a single callback per frame.
-- **Web Animations API** — flap rotation uses `element.animate()` on the compositor thread. No forced reflows from `offsetHeight` reads in hot loops.
-- **CSS containment** — every cell has `contain: layout style paint` so DOM changes in one flap never trigger layout recalculation outside that cell.
-- **GPU layer promotion** — falling flaps use `will-change: transform, opacity` for pre-promotion to compositor layers.
-- **Web Audio API sound** — plays a real recorded `click.wav` with randomized pitch (±0.2) per flap. Falls back to a synthesized click (highpass + lowpass filtered noise burst, 35ms duration) if no audio file is present. Audio concurrency capped at 8 simultaneous nodes with 25ms minimum interval.
+Characters cycle through the spool sequentially (A, B, C... until they reach the target), the same way a real Solari board works. None of the random color-scramble nonsense that every other clone does.
+
+The animation runs on a single `requestAnimationFrame` loop that processes a sorted queue of actions. A full 22x5 board transition schedules roughly 3,000 actions and they all run off one rAF callback per frame, not thousands of individual `setTimeout` calls.
+
+Flap rotation uses the Web Animations API (`element.animate()`) so it runs on the compositor thread. The old approach of toggling CSS animations with `offsetHeight` reflow hacks is gone. Every cell also has `contain: layout style paint` so changing one flap's text doesn't trigger layout recalculation across the entire board.
+
+Sound comes from the Web Audio API. If you drop a `click.wav` in the public folder it plays the real recording with slight pitch randomization (±0.2) per flap. No audio file? It synthesizes a click from a filtered noise burst. Concurrency is capped at 8 simultaneous audio nodes with a 25ms minimum interval so you don't blow out the audio thread.
 
 ### Phone Companion
 
-- **Message cards** — add multiple messages with the + button. Each card is an independent textarea. Messages loop automatically with configurable delay, or step through manually.
-- **Mini board preview** — a grid matching your exact rows and columns shows real characters in each cell, color emoji cells in their actual color, and per-row counters (`R1: 15/22`) with overflow warnings.
-- **Clock mode** — toggle from the companion to display live time (12h with seconds), day of week, month/date, and year, centered on the board and updating every second.
-- **Full customization** — every visual parameter is adjustable in real time: flap width/height/split, bezel radius, pinch depth/height/slope, ridge count/height/gap/gradient, typography (family, size, weight, offsets), grid gap/padding/radius/shadow, top/bottom flap gradients, 7 color emojis (🟥🟧🟨🟩🟦🟪⬜), animation speed/stagger/easing/perspective.
-- **Design Studio** — `custom-board.html` is a standalone tool with CSS export/import for designing flap aesthetics without a server.
+Add messages with the + button. Each message gets its own card. They loop automatically with a configurable delay, or you can step through them manually.
 
-### Security (3 layers)
+The mini board preview at the top shows a grid that matches your exact row/column count. It renders real characters in each cell, shows color emoji cells in their actual color, and displays per-row counters like `R1: 15/22` with a red overflow warning if you go over.
 
-1. **QR code with embedded secret** — the board generates a 32-character hex token (`crypto.randomBytes(16)`). The QR encodes `companion.html#BOARDID.secret`. Scanning auto-pairs instantly. The token is too long to read from across a room.
-2. **Approval gate for manual codes** — if someone types the 6-digit code without the secret, the board shows a full-screen "Device wants to connect — Approve?" prompt. The person at the TV must press Enter/Space or click Approve. Escape or Reject denies access.
-3. **Auto-lock after pairing** — once a companion connects, the board sets `locked: true`. All subsequent pair attempts are rejected. Pairing info disappears from the screen. The only way to unlock is disconnecting from the companion or kicking via the power button, which generates a new code and secret.
+Clock mode shows live time (12h with seconds), day of week, month/date, and year. Everything is centered on the board and flips every second.
+
+Every visual parameter is adjustable from the companion in real time: flap dimensions, bezel radius, pinch depth, ridge styling, typography (family, size, weight, offsets), grid gap, board shadow, color gradients for top and bottom flaps, and 7 color emojis (🟥🟧🟨🟩🟦🟪⬜). The standalone `custom-board.html` lets you design flap aesthetics and export/import CSS without needing the server.
+
+### Security
+
+Three layers, because the obvious question is "what if someone in the same room connects before you?"
+
+**Layer 1: QR code with embedded secret.** The board generates a 32-character hex token via `crypto.randomBytes(16)` and bakes it into the QR URL: `companion.html#BOARDID.secret`. Scan it and you're paired instantly. The token is way too long for someone across the room to read off the screen.
+
+**Layer 2: Approval gate for manual codes.** If someone types the 6-digit code without the secret (i.e. they can see the code but didn't scan the QR), the board shows a full-screen prompt: "Device wants to connect. Approve?" You press Enter or click Approve on the TV. Escape or Reject kills it.
+
+**Layer 3: Auto-lock after pairing.** Once a companion connects, the board locks. All pairing info disappears from the screen. Any new pair attempts get rejected. The only way to unlock is to disconnect from the companion or kick them with the power button on the status bar. Both generate a fresh code and secret.
 
 ### Connection
 
-- **Bidirectional auto-reconnect** — if the TV loses connection (browser crash, power loss), the server keeps the board record alive. The companion detects the disconnect and retries every 3 seconds. When the TV comes back, it reconnects with the same code and the companion re-syncs all settings and messages.
-- **Smooth grid resize** — changing rows/columns from the companion fades the board out (250ms CSS opacity transition), rebuilds the DOM, then fades back in. No flash or jump.
-- **WebSocket heartbeat** — server pings all connections every 30 seconds, terminates unresponsive ones.
+If the TV loses connection (browser crash, WiFi drops, whatever), the server keeps the board record alive. The companion notices and retries every 3 seconds. When the TV comes back, it reconnects with the same code, the companion re-syncs settings and messages, and everything picks up where it left off.
+
+Changing rows or columns from the companion fades the board out over 250ms, rebuilds the grid, and fades back in. No jarring flash.
+
+The server pings all WebSocket connections every 30 seconds and kills anything that doesn't respond.
 
 ## Architecture
 
@@ -73,53 +82,44 @@ splitflap.org/
     board.html           TV display (connects via WebSocket)
     companion.html       Phone remote (pairs via QR or manual code)
     custom-board.html    Standalone design tool (no server needed)
-    click.wav            Optional — recorded mechanical flap sound
+    click.wav            Optional recorded flap sound
 ```
 
-### Server (`server.js`)
+### Server
 
-Express serves static files. A `ws` WebSocket server handles real-time communication. Each board is stored in a `Map` with:
+Express serves static files. A `ws` WebSocket server handles pairing and message relay. Each board lives in a `Map`:
 
 ```
 boardId → {
-  boardWs,        // WebSocket connection to TV
-  companionWs,    // WebSocket connection to phone
-  pendingWs,      // WebSocket waiting for approval
+  boardWs,        // TV socket
+  companionWs,    // Phone socket
+  pendingWs,      // Socket waiting for approval
   secret,         // 32-char hex token for QR pairing
-  settings,       // Last companion settings (persisted for reconnect)
-  messages,       // Last message text (persisted for reconnect)
+  settings,       // Last companion settings (kept for reconnect)
+  messages,       // Last message text (kept for reconnect)
   mode,           // 'messages' | 'clock'
-  locked,         // true when companion is connected
-  lastActive      // Timestamp for TTL cleanup
+  locked,         // true once companion connects
+  lastActive      // Timestamp, boards expire after 24h
 }
 ```
 
-Message types flow in two directions:
+Messages flow in two directions:
 
 - **Companion → Server → Board**: `update_settings`, `update_messages`, `play_sequence`, `next_message`, `reset_board`, `set_mode`
 - **Board → Server → Companion**: `board_state`, `companion_joined`, `companion_disconnected`
 - **Pairing**: `register_board`, `pair`, `approve_pair`, `reject_pair`, `kick_companion`
 
-### Board (`board.html`)
+### Board
 
-The board is a CSS grid of flap cells. Each cell consists of:
+The board is a CSS grid of flap cells. Each cell is built from nested divs: outer plate with border radius, bezel with gradient, a recessed hole cut with `clip-path: polygon()` (computed from the pinch/slope/corner-arc parameters), top and bottom flap halves, the falling flap (animated with `element.animate()`, rotating from 0 to -90 degrees on X), the dark split line between halves, and ridges at the bottom.
 
-- Outer plate (`.rocker-switch`) with border radius
-- Bezel layer with gradient
-- Recessed hole with CSS `clip-path` polygon (calculated from pinch, slope, and corner arc parameters)
-- Top half flap (static, shows current character top half)
-- Bottom half flap (static, shows current character bottom half)
-- Falling flap (animated via Web Animations API, rotates from 0° to -90° on X axis)
-- Split overlay (the dark line between halves)
-- Ridge elements at the bottom of each cell
+The animation engine is a sorted array of `{time, fn}` objects. Each frame, it walks the array and fires everything whose time has passed, then splices those entries out. When the array is empty, the flip is done.
 
-The animation engine maintains a sorted array of `{time, fn}` objects. On each `requestAnimationFrame`, it processes all actions whose scheduled time has elapsed, then splices them from the array. When the queue is empty, the animation is complete.
+### Companion
 
-### Companion (`companion.html`)
+Vanilla HTML/CSS/JS, optimized for mobile. Talks to the board exclusively through the server. The companion and board never connect directly. State changes go as JSON over the socket and the board applies them.
 
-A mobile-optimized control panel built with vanilla HTML/CSS/JS. Communicates with the board exclusively through the WebSocket server — the companion and board never connect directly. All state changes are sent as JSON messages and applied on the board side.
-
-The mini board preview parses the current message text, splits it into a grid matching the board's rows/columns, and renders each cell with the actual character or color. This runs on every keystroke via `requestAnimationFrame` debouncing.
+The mini preview parses the current message, splits it into a grid matching the board dimensions, and re-renders on every keystroke.
 
 ## Quick Start
 
@@ -132,32 +132,26 @@ node server.js
 
 Open `http://localhost:3000/board.html` on your TV.  
 Open `http://localhost:3000/companion.html` on your phone.  
-Scan the QR code. Done.
+Scan the QR code.
 
-See **[self-hosting.md](self-hosting.md)** for production deployment with HTTPS, systemd, and reverse proxy.
+See **[self-hosting.md](self-hosting.md)** for production deployment with HTTPS, systemd, Docker, and reverse proxy configs.
 
 ## Dependencies
 
-| Package              | Version | Purpose                                             |
-| -------------------- | ------- | --------------------------------------------------- |
-| `express`            | ^4.x    | HTTP server, static file serving                    |
-| `ws`                 | ^8.x    | WebSocket server                                    |
-| `helmet`             | ^7.x    | Security headers (XSS, HSTS, content-type sniffing) |
-| `express-rate-limit` | ^7.x    | API endpoint rate limiting (100 req/15 min)         |
+| Package              | Version | Purpose                        |
+| -------------------- | ------- | ------------------------------ |
+| `express`            | ^4.x    | HTTP server, static files      |
+| `ws`                 | ^8.x    | WebSocket server               |
+| `helmet`             | ^7.x    | Security headers               |
+| `express-rate-limit` | ^7.x    | Rate limiting (100 req/15 min) |
 
 No frontend dependencies. No build tools. No transpilation.
 
 ## Browser Support
 
-Tested on:
+Works on Chrome/Edge 90+, Safari 15+ (iOS and macOS), Firefox 90+, Samsung Internet 15+, and most Chromium-based Smart TV browsers.
 
-- Chrome/Edge 90+
-- Safari 15+ (iOS and macOS)
-- Firefox 90+
-- Samsung Internet 15+
-- Any Chromium-based Smart TV browser
-
-Requires: CSS `clip-path: polygon()`, Web Animations API, Web Audio API, WebSocket.
+Needs: CSS `clip-path: polygon()`, Web Animations API, Web Audio API, WebSocket.
 
 ## Configuration
 
@@ -167,33 +161,33 @@ Requires: CSS `clip-path: polygon()`, Web Animations API, Web Audio API, WebSock
 | -------- | ------- | ----------- |
 | `PORT`   | `3000`  | Server port |
 
-### Board Constants (in `board.html` and `companion.html`)
+### Board Defaults
 
-The `S` object contains all visual parameters with sensible defaults. Every value is adjustable from the companion UI at runtime. Key defaults:
+The `S` object in `board.html` and `companion.html` holds all visual parameters. Everything is adjustable from the companion UI at runtime.
 
-| Parameter      | Default | Description                         |
-| -------------- | ------- | ----------------------------------- |
-| `cols`         | 22      | Grid columns                        |
-| `rows`         | 5       | Grid rows                           |
-| `animDuration` | 360ms   | Final flip animation duration       |
-| `fastSpeed`    | 25ms    | Intermediate spool cycling speed    |
-| `animStagger`  | 40ms    | Wave delay between adjacent cells   |
-| `msgDelay`     | 6000ms  | Pause between messages in loop mode |
-| `scale`        | 0.22    | Flap cell scale factor              |
+| Parameter      | Default | What it does                           |
+| -------------- | ------- | -------------------------------------- |
+| `cols`         | 22      | Grid columns                           |
+| `rows`         | 5       | Grid rows                              |
+| `animDuration` | 360ms   | Final flip duration                    |
+| `fastSpeed`    | 25ms    | Speed per intermediate spool character |
+| `animStagger`  | 40ms    | Wave delay between adjacent cells      |
+| `msgDelay`     | 6000ms  | Pause between messages when looping    |
+| `scale`        | 0.22    | Cell scale factor                      |
 
-## Performance Notes
+## Performance
 
-A 22×5 board (110 cells) with a full-board transition:
+Numbers for a 22x5 board (110 cells) doing a full transition:
 
-- **Animation queue**: ~3,000 scheduled actions (110 cells × ~27 avg spool steps × 3 actions each)
-- **DOM operations**: Cached element references (`cellCache[]`) eliminate querySelector calls during animation
-- **Audio**: Capped at 8 concurrent `AudioBufferSourceNode` instances with 25ms throttle
-- **Layout**: CSS `contain` on each cell prevents global layout thrash. No `filter: drop-shadow` on animated elements (was removed — it was 220 GPU filter operations per frame)
-- **Compositor**: Falling flaps run on the compositor thread via Web Animations API, no main-thread style recalculation during flip
+- **~3,000 scheduled actions** (110 cells × ~27 avg spool steps × 3 actions each), all processed by one rAF loop
+- **Zero querySelector calls during animation** thanks to the `cellCache[]` built at render time
+- **8 max concurrent audio nodes**, 25ms throttle between clicks
+- **No `filter: drop-shadow`** on animated elements (removing it from 220 cells eliminated 220 GPU filter compositing ops per frame)
+- **Compositor-thread flips** via Web Animations API, no main-thread style recalc during animation
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT. See [LICENSE](LICENSE).
 
 ## Author
 
