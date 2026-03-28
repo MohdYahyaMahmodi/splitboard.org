@@ -130,9 +130,7 @@
       .rocker-scale-wrapper {
         contain: layout style paint;
       }
-      .rocker-wrapper-falling {
-        will-change: transform, opacity;
-      }
+
       .rocker-switch {
         width: 250px;
         height: 540px;
@@ -1524,76 +1522,128 @@
         const c = cellCache[idx];
         if (!c) return 0;
         const delay = getDelay(idx);
+
         let oi = spoolIndexOf(oldChar || " "),
           ni = spoolIndexOf(newChar || " ");
         let steps = ni - oi;
         if (steps < 0) steps += SPOOL.length;
         if (steps === 0 && oldChar !== newChar) steps = 1;
+
         const path = [];
-        for (let j = 1; j <= steps; j++)
-          path.push(SPOOL[(oi + j) % SPOOL.length]);
+        for (let i = 1; i <= steps; i++)
+          path.push(SPOOL[(oi + i) % SPOOL.length]);
         if (!path.length || path[path.length - 1] !== (newChar || " "))
           path.push(newChar || " ");
+
         let t = delay;
+        // Reference the correct state object name:
+        // - board.html / custom-board.html use `S`
+        // - index.html uses `state`
+        // Adjust the variable name to match your file, or use a
+        // local alias like: const _S = (typeof S !== 'undefined') ? S : state;
+        const _S = typeof S !== "undefined" ? S : state;
+        const FAST = _S.fastSpeed;
+        const FINAL = _S.animDuration;
+
         path.forEach((char, i) => {
           const isLast = i === path.length - 1;
-          const speed = isLast ? state.animDuration : state.fastSpeed;
-          const easing = isLast ? state.animEasing : "linear";
-          const isColor = !!colorMap[char],
-            dc = isColor ? "" : char === " " ? "" : char,
-            bg = isColor ? colorMap[char] : "";
-          const prev = i === 0 ? oldChar || " " : path[i - 1],
-            prevIsColor = !!colorMap[prev];
-          const pdc = prevIsColor ? "" : prev === " " ? "" : prev,
-            pbg = prevIsColor ? colorMap[prev] : "";
-          const ct = t,
-            cs = speed;
-          scheduleAction(ct, () => {
-            if (c.sTop) c.sTop.textContent = dc;
-            if (c.topBg) c.topBg.style.background = bg;
-            if (c.fTxt) c.fTxt.textContent = pdc;
-            if (c.fallBg) c.fallBg.style.background = pbg;
-            if (c.wrap) {
-              if (c.wrap._anim)
-                try {
-                  c.wrap._anim.cancel();
-                } catch (e) {}
-              c.wrap.style.opacity = "1";
-              c.wrap._anim = c.wrap.animate(
-                [
-                  { transform: "rotateX(0deg)", opacity: 1 },
-                  { transform: "rotateX(-90deg)", opacity: 0 },
-                ],
-                {
-                  duration: cs,
-                  easing: easing === "linear" ? "linear" : easing,
-                  fill: "forwards",
-                },
-              );
-            }
-            if (isLast || i % 3 === 0) playClick();
-          });
-          scheduleAction(ct + cs * 0.5, () => {
-            if (c.sBtm) c.sBtm.textContent = dc;
-            if (c.botBg) c.botBg.style.background = bg;
-          });
-          scheduleAction(ct + cs, () => {
-            if (c.wrap) {
-              if (c.wrap._anim)
-                try {
-                  c.wrap._anim.cancel();
-                } catch (e) {}
-              c.wrap.style.opacity = "0";
-              c.wrap.style.transform = "";
-            }
-            if (c.fTxt) c.fTxt.textContent = dc;
-            if (c.fallBg) c.fallBg.style.background = bg;
-          });
+          const speed = isLast ? FINAL : FAST;
+          const easing = isLast ? _S.animEasing : "linear";
+
+          const isColor = !!(
+            typeof COLOR_MAP !== "undefined" ? COLOR_MAP : colorMap
+          )[char];
+          const cmap = typeof COLOR_MAP !== "undefined" ? COLOR_MAP : colorMap;
+          const dc = isColor ? "" : char === " " ? "" : char;
+          const bg = isColor ? cmap[char] : "";
+
+          const prev = i === 0 ? oldChar || " " : path[i - 1];
+          const prevIsColor = !!cmap[prev];
+          const pdc = prevIsColor ? "" : prev === " " ? "" : prev;
+          const pbg = prevIsColor ? cmap[prev] : "";
+
+          const capturedT = t;
+          const capturedSpeed = speed;
+
+          if (!isLast) {
+            // ── INTERMEDIATE STEP: instant DOM swap, NO Animation object ──
+            scheduleAction(capturedT, () => {
+              // Update top half to new char
+              if (c.sTop) c.sTop.textContent = dc;
+              if (c.topBg) c.topBg.style.background = bg;
+              // Update bottom half to new char (no half-flip delay needed
+              // at 25ms — it's visually instant anyway)
+              if (c.sBtm) c.sBtm.textContent = dc;
+              if (c.botBg) c.botBg.style.background = bg;
+              // Audio: only every 3rd intermediate
+              if (i % 3 === 0) {
+                if (typeof playClick === "function") {
+                  // index.html's playClick takes no args
+                  // board.html / custom-board.html take (vol, rate)
+                  if (playClick.length === 0) playClick();
+                  else playClick(_S.soundVolume, _S.soundRate);
+                }
+              }
+            });
+          } else {
+            // ── FINAL STEP: full falling-flap animation ──
+            scheduleAction(capturedT, () => {
+              if (c.sTop) c.sTop.textContent = dc;
+              if (c.topBg) c.topBg.style.background = bg;
+              if (c.fTxt) c.fTxt.textContent = pdc;
+              if (c.fallBg) c.fallBg.style.background = pbg;
+
+              if (c.wrap) {
+                if (c.wrap._anim)
+                  try {
+                    c.wrap._anim.cancel();
+                  } catch (_) {}
+                c.wrap.style.opacity = "1";
+                c.wrap._anim = c.wrap.animate(
+                  [
+                    { transform: "rotateX(0deg)", opacity: 1 },
+                    { transform: "rotateX(-90deg)", opacity: 0 },
+                  ],
+                  {
+                    duration: capturedSpeed,
+                    easing: easing === "linear" ? "linear" : easing,
+                    fill: "forwards",
+                  },
+                );
+              }
+              // Always play click on final land
+              if (typeof playClick === "function") {
+                if (playClick.length === 0) playClick();
+                else playClick(_S.soundVolume, _S.soundRate);
+              }
+            });
+
+            // Halfway: update bottom half
+            scheduleAction(capturedT + capturedSpeed * 0.5, () => {
+              if (c.sBtm) c.sBtm.textContent = dc;
+              if (c.botBg) c.botBg.style.background = bg;
+            });
+
+            // End: clean up falling flap
+            scheduleAction(capturedT + capturedSpeed, () => {
+              if (c.wrap) {
+                if (c.wrap._anim)
+                  try {
+                    c.wrap._anim.cancel();
+                  } catch (_) {}
+                c.wrap.style.opacity = "0";
+                c.wrap.style.transform = "";
+              }
+              if (c.fTxt) c.fTxt.textContent = dc;
+              if (c.fallBg) c.fallBg.style.background = bg;
+            });
+          }
+
           t += speed;
         });
+
         return t;
       }
-
       function flipToTarget(target, onDone) {
         if (isFlipping) {
           if (onDone) onDone();
