@@ -33,6 +33,7 @@ const DEFAULT_WEATHER_POINT = {
   longitude: -97.35,
 };
 const WEATHER_CACHE_MS = 10 * 60 * 1000;
+const WEATHER_FETCH_TIMEOUT_MS = 8 * 1000;
 const WEATHER_PERIOD_COUNT = 4;
 const OBSERVATION_STATION_COUNT = 5;
 const weatherCache = new Map();
@@ -53,16 +54,30 @@ function genSecret() {
 }
 
 async function fetchWeatherGovJson(url) {
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/geo+json, application/json",
-      "User-Agent": "splitflap.org weather proxy",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Weather API ${res.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEATHER_FETCH_TIMEOUT_MS);
+  timeout.unref?.();
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/geo+json, application/json",
+        "User-Agent": "splitflap.org weather proxy",
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Weather API ${res.status}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Weather API timeout after ${WEATHER_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 function normalizeWeatherPoint(rawLatitude, rawLongitude) {
@@ -227,7 +242,7 @@ async function getWeatherData(point, requestedStationId) {
     (station) => station.id === stationId,
   );
 
-  const alertsResult = await fetchWeatherGovJson(`https://api.weather.gov/alerts/active?status=actual,exercise,system,test,draft&message_type=cancel&point=${latitude}%2C${longitude}`);
+  const alertsResult = await fetchWeatherGovJson(`https://api.weather.gov/alerts/active?status=actual,exercise,system,test,draft&message_type=alert,update&point=${latitude}%2C${longitude}`);
   const alerts = (alertsResult?.features || []).map((feature) => ({
     id: feature.id || "",
     area: feature.properties?.areaDesc || "",
