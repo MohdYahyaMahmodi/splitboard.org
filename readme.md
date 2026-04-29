@@ -30,7 +30,7 @@
 
 A split-flap display that runs in a browser. The kind you used to see at train stations and airports. Open `board.html` on a TV, scan the QR code with your phone, and your phone becomes the wireless remote.
 
-Four files. One Node.js server, a board page, a phone companion, and a standalone design tool. No build step, no frameworks, no external APIs.
+Four files. One Node.js server, a board page, a phone companion, and a standalone design tool. No build step, no frameworks, and a weather.gov integration for live forecast mode.
 
 ## Features
 
@@ -51,6 +51,9 @@ Add messages with the + button. Each message gets its own card. They loop automa
 The mini board preview at the top shows a grid that matches your exact row/column count. It renders real characters in each cell, shows color emoji cells in their actual color, and displays per-row counters like `R1: 15/22` with a red overflow warning if you go over.
 
 Clock mode shows live time (12h with seconds), day of week, month/date, and year. Everything is centered on the board and flips every second.
+
+Weather mode shows the next four forecast periods from weather.gov and, when active alerts exist, includes an alert slide in the rotation before flipping through the forecast details.  If an observation station is selected, a current
+weather slide is provided as well.
 
 Every visual parameter is adjustable from the companion in real time: flap dimensions, bezel radius, pinch depth, ridge styling, typography (family, size, weight, offsets), grid gap, board shadow, color gradients for top and bottom flaps, and 7 color emojis (🟥🟧🟨🟩🟦🟪⬜). The standalone `custom-board.html` lets you design flap aesthetics and export/import CSS without needing the server.
 
@@ -97,7 +100,7 @@ boardId → {
   secret,         // 32-char hex token for QR pairing
   settings,       // Last companion settings (kept for reconnect)
   messages,       // Last message text (kept for reconnect)
-  mode,           // 'messages' | 'clock'
+  mode,           // 'messages' | 'clock' | 'weather'
   locked,         // true once companion connects
   lastActive      // Timestamp, boards expire after 24h
 }
