@@ -52,7 +52,7 @@ The mini board preview at the top shows a grid that matches your exact row/colum
 
 Clock mode shows live time (12h with seconds), day of week, month/date, and year. Everything is centered on the board and flips every second.
 
-Weather mode shows the next four forecast periods from weather.gov and, when active alerts exist, includes an alert slide in the rotation before flipping through the forecast details.  If a observation station is selected, a current
+Weather mode shows the next four forecast periods from weather.gov and, when active alerts exist, includes an alert slide in the rotation before flipping through the forecast details.  If an observation station is selected, a current
 weather slide is provided as well.
 
 Every visual parameter is adjustable from the companion in real time: flap dimensions, bezel radius, pinch depth, ridge styling, typography (family, size, weight, offsets), grid gap, board shadow, color gradients for top and bottom flaps, and 7 color emojis (🟥🟧🟨🟩🟦🟪⬜). The standalone `custom-board.html` lets you design flap aesthetics and export/import CSS without needing the server.
