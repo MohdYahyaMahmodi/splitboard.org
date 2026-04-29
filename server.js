@@ -99,28 +99,16 @@ function weatherDataKey(point, stationId) {
   return `${weatherPointKey(point)}:${stationId || ""}`;
 }
 
-function distanceMilesBetween(a, b) {
-  const toRad = (value) => (value * Math.PI) / 180;
-  const earthRadiusMiles = 3958.8;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLon = toRad(b.longitude - a.longitude);
-  const lat1 = toRad(a.latitude);
-  const lat2 = toRad(b.latitude);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
-function getStationDistanceMiles(point, feature) {
-  const coords = feature?.geometry?.coordinates;
-  if (!Array.isArray(coords) || coords.length < 2) return null;
-  const longitude = Number(coords[0]);
-  const latitude = Number(coords[1]);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return Number(
-    distanceMilesBetween(point, { latitude, longitude }).toFixed(1),
-  );
+function getStationDistanceMiles(feature) {
+  const distance = feature?.properties?.distance;
+  const value = Number(distance?.value);
+  if (!Number.isFinite(value)) return null;
+  const unitCode = String(distance?.unitCode || "").toLowerCase();
+  if (unitCode.includes("km")) return Number((value * 0.621371).toFixed(1));
+  if (unitCode.includes(":m") || unitCode.endsWith("/m")) {
+    return Number((value / 1609.344).toFixed(1));
+  }
+  return Number((value * 0.621371).toFixed(1));
 }
 
 function clearWeatherPointCaches(point) {
@@ -200,7 +188,7 @@ async function getWeatherPointData(weatherPoint) {
     .map((feature) => ({
       id: normalizeWeatherStation(feature.properties?.stationIdentifier),
       name: feature.properties?.name || "",
-      distanceMiles: getStationDistanceMiles(weatherPoint, feature),
+      distanceMiles: getStationDistanceMiles(feature),
     }))
     .filter((station) => station.id)
     .slice(0, OBSERVATION_STATION_COUNT);
