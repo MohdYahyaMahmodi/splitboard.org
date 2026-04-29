@@ -288,7 +288,8 @@ async function getWeatherData(point, requestedStationId) {
     updatedAt:
       forecast?.properties?.updateTime || forecast?.properties?.generatedAt || null,
     alerts,
-    current: selectedStation ? await getCurrentWeather(selectedStation) : null,
+    current: selectedStation ? await getCurrentWeather(selectedStation).catch(() => null)
+      : null,
     periods,
   };
 
