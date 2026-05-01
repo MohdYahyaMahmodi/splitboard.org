@@ -33,10 +33,13 @@ const DEFAULT_WEATHER_POINT = {
   longitude: -97.35,
 };
 const WEATHER_CACHE_MS = 10 * 60 * 1000;
+const WEATHER_ALERT_CACHE_MS = 60 * 1000;
+const WEATHER_POINT_CACHE_MS = 60 * 60 * 1000;
 const WEATHER_FETCH_TIMEOUT_MS = 8 * 1000;
 const WEATHER_PERIOD_COUNT = 4;
 const OBSERVATION_STATION_COUNT = 5;
 const weatherCache = new Map();
+const weatherAlertCache = new Map();
 const weatherPointCache = new Map();
 
 function genBoardId() {
@@ -69,7 +72,7 @@ async function fetchWeatherGovJson(url) {
     if (!res.ok) {
       throw new Error(`Weather API ${res.status}`);
     }
-    return res.json();
+    return await res.json();
   } catch (err) {
     if (err?.name === "AbortError") {
       throw new Error(`Weather API timeout after ${WEATHER_FETCH_TIMEOUT_MS}ms`);
@@ -81,10 +84,10 @@ async function fetchWeatherGovJson(url) {
 }
 
 function normalizeWeatherPoint(rawLatitude, rawLongitude) {
-  const latitude =
-    rawLatitude === undefined ? DEFAULT_WEATHER_POINT.latitude : Number(rawLatitude);
-  const longitude =
-    rawLongitude === undefined ? DEFAULT_WEATHER_POINT.longitude : Number(rawLongitude);
+  if (rawLatitude === undefined || rawLongitude === undefined) return null;
+  const latitude = Number(rawLatitude);
+  const longitude = Number(rawLongitude);
+  
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -131,6 +134,7 @@ function clearWeatherPointCaches(point) {
   for (const cacheKey of weatherCache.keys()) {
     if (cacheKey === key || cacheKey.startsWith(`${key}:`)) weatherCache.delete(cacheKey);
   }
+  weatherAlertCache.delete(key);
   weatherPointCache.delete(key);
 }
 
@@ -185,7 +189,8 @@ function buildCurrentObservation(observation, station) {
 
 async function getWeatherPointData(weatherPoint) {
   const key = weatherPointKey(weatherPoint);
-  if (weatherPointCache.has(key)) return weatherPointCache.get(key);
+  const cached = weatherPointCache.get(key);
+  if (cached?.data && cached.expiresAt > Date.now()) return cached.data;
 
   const { latitude, longitude } = weatherPoint;
   const pointResponse = await fetchWeatherGovJson(
@@ -217,7 +222,10 @@ async function getWeatherPointData(weatherPoint) {
     forecastUrl: `${forecastBaseUrl}?units=us`,
     observationStations,
   };
-  weatherPointCache.set(key, pointData);
+  weatherPointCache.set(key, {
+    data: pointData,
+    expiresAt: Date.now() + WEATHER_POINT_CACHE_MS,
+  });
   return pointData;
 }
 
@@ -229,19 +237,13 @@ async function getCurrentWeather(station) {
   return buildCurrentObservation(observation, station);
 }
 
-async function getWeatherData(point, requestedStationId) {
+async function getWeatherAlerts(point) {
   const now = Date.now();
-  const stationId = normalizeWeatherStation(requestedStationId);
-  const key = weatherDataKey(point, stationId);
-  const cached = weatherCache.get(key);
+  const key = weatherPointKey(point);
+  const cached = weatherAlertCache.get(key);
   if (cached?.data && cached.expiresAt > now) return cached.data;
 
-  const pointData = await getWeatherPointData(point);
-  const { latitude, longitude } = pointData;
-  const selectedStation = pointData.observationStations.find(
-    (station) => station.id === stationId,
-  );
-
+  const { latitude, longitude } = point;
   const alertsResult = await fetchWeatherGovJson(`https://api.weather.gov/alerts/active?status=actual,exercise,system,test,draft&message_type=alert,update&point=${latitude}%2C${longitude}`);
   const alerts = (alertsResult?.features || []).map((feature) => ({
     id: feature.id || "",
@@ -253,8 +255,35 @@ async function getWeatherData(point, requestedStationId) {
     event: feature.properties?.event || "",
     effective: feature.properties?.effective || null,
     expires: feature.properties?.expires || null,
+    description: feature.properties?.description || "",
+    instruction: feature.properties?.instruction || "",
   }));
 
+  weatherAlertCache.set(key, {
+    data: alerts,
+    expiresAt: now + WEATHER_ALERT_CACHE_MS,
+  });
+  return alerts;
+}
+
+async function getWeatherData(point, requestedStationId) {
+  const now = Date.now();
+  const stationId = normalizeWeatherStation(requestedStationId);
+  const key = weatherDataKey(point, stationId);
+  const cached = weatherCache.get(key);
+  if (cached?.data && cached.expiresAt > now) {
+    const alerts = await getWeatherAlerts(point);
+    cached.data.alerts = alerts;
+    return cached.data;
+  }
+
+  const pointData = await getWeatherPointData(point);
+  const { latitude, longitude } = pointData;
+  const selectedStation = pointData.observationStations.find(
+    (station) => station.id === stationId,
+  );
+
+  const alerts = await getWeatherAlerts(point);
   const forecast = await fetchWeatherGovJson(pointData.forecastUrl);
 
   const periods = (forecast?.properties?.periods || [])
@@ -678,8 +707,8 @@ function handleMsg(ws, msg) {
         }
         if (typeof msg.weatherStation === "string") {
           b.weatherStation = normalizeWeatherStation(msg.weatherStation);
-          msg.weatherStation = b.weatherStation;
         }
+        msg.weatherStation = b.weatherStation;
       }
       safeSend(b.boardWs, msg);
       break;

@@ -1924,6 +1924,7 @@
       function useCurrentLocation() {
         if (!navigator.geolocation) {
           setWeatherStatus("Location is not available in this browser.");
+          loadWeatherStations(currentMode === "weather");
           return;
         }
         setWeatherStatus("Requesting location...");
@@ -1936,10 +1937,10 @@
             syncWeatherPointUI();
             setWeatherStatus("Location updated.");
             loadWeatherStations(currentMode === "weather");
-            if (currentMode === "weather") sendMode();
           },
           () => {
             setWeatherStatus("Location permission unavailable. Enter coordinates.");
+            loadWeatherStations(currentMode === "weather");
           },
           { enableHighAccuracy: false, maximumAge: 10 * 60 * 1000, timeout: 10000 },
         );
@@ -1959,12 +1960,15 @@
         document
           .getElementById("weather-controls")
           .classList.toggle("active", mode === "weather");
-        sendMode();
-        if (mode === "weather" && !weatherLocationRequested) {
-          weatherLocationRequested = true;
-          useCurrentLocation();
-        } else if (mode === "weather") {
-          loadWeatherStations(true);
+        if (mode === "weather") {
+          if (!weatherLocationRequested) {
+            weatherLocationRequested = true;
+            useCurrentLocation();
+          } else {
+            loadWeatherStations(true);
+          }
+        } else {
+          sendMode();
         }
       }
 
@@ -2374,12 +2378,10 @@
             clearTimeout(window._wd);
             window._wd = setTimeout(() => {
               loadWeatherStations(currentMode === "weather");
-              if (currentMode === "weather") sendMode();
             }, 350);
           });
           el.addEventListener("change", () => {
             loadWeatherStations(currentMode === "weather");
-            if (currentMode === "weather") sendMode();
           });
         });
       document.getElementById("weather-station").addEventListener("change", (e) => {

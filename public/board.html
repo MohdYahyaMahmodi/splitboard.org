@@ -1015,6 +1015,16 @@
         weatherRequestId++;
         weatherPeriodIndex = 0;
       }
+      function updateWeatherFlipInterval() {
+        if (weatherFlipInterval) {
+          clearInterval(weatherFlipInterval);
+          weatherFlipInterval = null;
+        }
+        if (boardMode !== "weather") return;
+        weatherFlipInterval = setInterval(() => {
+          advanceWeatherPeriod();
+        }, Math.max(4000, S.msgDelay));
+      }
       function stopClock() {
         clearClockTimer();
         if (boardMode === "clock") boardMode = "messages";
@@ -1099,6 +1109,11 @@
       function renderWeatherState(lines) {
         flipToTarget(textToCenteredGrid(lines));
       }
+      function weatherAlertHeader() {
+        if (S.cols >= 9) return "🟥 ALERT 🟥";
+        if (S.cols >= 7) return "🟥ALERT🟥";
+        return "ALERT";
+      }
       function getWeatherSlides(data) {
         const slides = [];
         const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
@@ -1139,17 +1154,17 @@
         if (slide?.type === "alert") {
           const alert = slide.alert || {};
           const severity = (alert.severity || "").toUpperCase();
-          const area = (alert.area || "").toUpperCase().split(";")[0].trim();
+          const instruction = (alert.instruction || "").toUpperCase().split(";")[0].trim();
           const updated = formatWeatherTime(alert.effective || alert.expires);
           const lines = [
-            "ALERT",
+            weatherAlertHeader(),
             ...wrapWeatherText(
               alert.title || alert.event || "WEATHER ALERT",
               S.rows >= 5 ? 2 : 1,
             ),
             severity || "ACTIVE",
           ];
-          if (S.rows >= 5 && area) lines.push(area);
+          if (S.rows >= 5 && instruction) lines.push(instruction);
           else if (S.rows >= 4 && updated) lines.push(updated);
           renderWeatherState(lines);
           return;
@@ -1295,9 +1310,7 @@
         renderWeatherState(["WEATHER", "LOADING..."]);
         const requestId = ++weatherRequestId;
         fetchAndRenderWeather(requestId);
-        weatherFlipInterval = setInterval(() => {
-          advanceWeatherPeriod();
-        }, Math.max(4000, S.msgDelay));
+        updateWeatherFlipInterval();
         weatherInterval = setInterval(() => {
           fetchAndRenderWeather(requestId);
         }, 10 * 60 * 1000);
@@ -1661,6 +1674,8 @@
               if (msg.settings && typeof msg.settings === "object") {
                 Object.assign(S, msg.settings);
                 applySettings();
+                if (Object.prototype.hasOwnProperty.call(msg.settings, "msgDelay"))
+                  updateWeatherFlipInterval();
               }
               break;
             case "update_messages":
