@@ -28,6 +28,19 @@ app.use(express.static(path.join(__dirname, "public")));
 const boards = new Map();
 const BOARD_TTL = 24 * 60 * 60 * 1000;
 const ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DEFAULT_WEATHER_POINT = {
+  latitude: 35.3394,
+  longitude: -97.35,
+};
+const WEATHER_CACHE_MS = 10 * 60 * 1000;
+const WEATHER_ALERT_CACHE_MS = 60 * 1000;
+const WEATHER_POINT_CACHE_MS = 60 * 60 * 1000;
+const WEATHER_FETCH_TIMEOUT_MS = 8 * 1000;
+const WEATHER_PERIOD_COUNT = 4;
+const OBSERVATION_STATION_COUNT = 5;
+const weatherCache = new Map();
+const weatherAlertCache = new Map();
+const weatherPointCache = new Map();
 
 function genBoardId() {
   let id;
@@ -41,6 +54,279 @@ function genBoardId() {
 
 function genSecret() {
   return crypto.randomBytes(16).toString("hex"); // 32 hex chars
+}
+
+async function fetchWeatherGovJson(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEATHER_FETCH_TIMEOUT_MS);
+  timeout.unref?.();
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/geo+json, application/json",
+        "User-Agent": "splitflap.org weather proxy",
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Weather API ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Weather API timeout after ${WEATHER_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeWeatherPoint(rawLatitude, rawLongitude) {
+  if (rawLatitude === undefined || rawLongitude === undefined) return null;
+  const latitude = Number(rawLatitude);
+  const longitude = Number(rawLongitude);
+  
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+  return {
+    latitude: Number(latitude.toFixed(4)),
+    longitude: Number(longitude.toFixed(4)),
+  };
+}
+
+function weatherPointKey(point) {
+  return `${point.latitude},${point.longitude}`;
+}
+
+function normalizeWeatherStation(rawStation) {
+  if (typeof rawStation !== "string") return "";
+  return rawStation.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+}
+
+function weatherDataKey(point, stationId) {
+  return `${weatherPointKey(point)}:${stationId || ""}`;
+}
+
+function getStationDistanceMiles(feature) {
+  const distance = feature?.properties?.distance;
+  const value = Number(distance?.value);
+  if (!Number.isFinite(value)) return null;
+  const unitCode = String(distance?.unitCode || "").toLowerCase();
+  if (unitCode.includes("km")) return Number((value * 0.621371).toFixed(1));
+  if (unitCode.includes(":m") || unitCode.endsWith("/m")) {
+    return Number((value / 1609.344).toFixed(1));
+  }
+  return Number((value * 0.621371).toFixed(1));
+}
+
+function clearWeatherPointCaches(point) {
+  const key = weatherPointKey(point);
+  for (const cacheKey of weatherCache.keys()) {
+    if (cacheKey === key || cacheKey.startsWith(`${key}:`)) weatherCache.delete(cacheKey);
+  }
+  weatherAlertCache.delete(key);
+  weatherPointCache.delete(key);
+}
+
+function convertTemperature(value, unitCode) {
+  if (typeof value !== "number") return null;
+  if (String(unitCode).toLowerCase().includes("degc")) {
+    return Math.round((value * 9) / 5 + 32);
+  }
+  return Math.round(value);
+}
+
+function convertWindSpeed(value, unitCode) {
+  if (typeof value !== "number") return null;
+  const unit = String(unitCode).toLowerCase();
+  if (unit.includes("m_s-1")) return Math.round(value * 2.23694);
+  if (unit.includes("km_h-1")) return Math.round(value * 0.621371);
+  return Math.round(value);
+}
+
+function convertPressure(value, unitCode) {
+  if (typeof value !== "number") return null;
+  if (String(unitCode).toLowerCase().includes("pa")) {
+    return Number((value / 3386.389).toFixed(2));
+  }
+  return Number(value.toFixed(2));
+}
+
+function buildCurrentObservation(observation, station) {
+  const props = observation?.properties || {};
+  const temperature = props.temperature || {};
+  const windSpeed = props.windSpeed || {};
+  const windGust = props.windGust || {};
+  const pressure = props.barometricPressure || {};
+  const humidity = props.relativeHumidity || {};
+  return {
+    station: station.id,
+    stationName: station.name || station.id,
+    stationDistanceMiles: station.distanceMiles,
+    text: props.textDescription || "",
+    temperature: convertTemperature(temperature.value, temperature.unitCode),
+    temperatureUnit: "F",
+    windDirection: typeof props.windDirection?.value === "number"
+      ? Math.round(props.windDirection.value)
+      : null,
+    windSpeed: convertWindSpeed(windSpeed.value, windSpeed.unitCode),
+    windGust: convertWindSpeed(windGust.value, windGust.unitCode),
+    pressure: convertPressure(pressure.value, pressure.unitCode),
+    humidity: typeof humidity.value === "number" ? Math.round(humidity.value) : null,
+    timestamp: props.timestamp || null,
+  };
+}
+
+async function getWeatherPointData(weatherPoint) {
+  const key = weatherPointKey(weatherPoint);
+  const cached = weatherPointCache.get(key);
+  if (cached?.data && cached.expiresAt > Date.now()) return cached.data;
+
+  const { latitude, longitude } = weatherPoint;
+  const pointResponse = await fetchWeatherGovJson(
+    `https://api.weather.gov/points/${latitude},${longitude}`,
+  );
+  const forecastBaseUrl = pointResponse?.properties?.forecast;
+  if (!forecastBaseUrl) throw new Error("Forecast URL missing");
+
+  const stationsUrl = pointResponse?.properties?.observationStations;
+  if (!stationsUrl) throw new Error("Observation stations URL missing");
+
+  const stationsResponse = await fetchWeatherGovJson(stationsUrl);
+  // get the first 5 stations with valid IDs
+  const observationStations = (stationsResponse?.features || [])
+    .map((feature) => ({
+      id: normalizeWeatherStation(feature.properties?.stationIdentifier),
+      name: feature.properties?.name || "",
+      distanceMiles: getStationDistanceMiles(feature),
+    }))
+    .filter((station) => station.id)
+    .slice(0, OBSERVATION_STATION_COUNT);
+
+  const pointData = {
+    latitude,
+    longitude,
+    gridId: pointResponse?.properties?.gridId || "",
+    gridX: pointResponse?.properties?.gridX ?? null,
+    gridY: pointResponse?.properties?.gridY ?? null,
+    forecastUrl: `${forecastBaseUrl}?units=us`,
+    observationStations,
+  };
+  weatherPointCache.set(key, {
+    data: pointData,
+    expiresAt: Date.now() + WEATHER_POINT_CACHE_MS,
+  });
+  return pointData;
+}
+
+async function getCurrentWeather(station) {
+  if (!station?.id) return null;
+  const observation = await fetchWeatherGovJson(
+    `https://api.weather.gov/stations/${encodeURIComponent(station.id)}/observations/latest`,
+  );
+  return buildCurrentObservation(observation, station);
+}
+
+async function getWeatherAlerts(point) {
+  const now = Date.now();
+  const key = weatherPointKey(point);
+  const cached = weatherAlertCache.get(key);
+  if (cached?.data && cached.expiresAt > now) return cached.data;
+
+  const { latitude, longitude } = point;
+  const alertsResult = await fetchWeatherGovJson(`https://api.weather.gov/alerts/active?status=actual,exercise,system,test,draft&message_type=alert,update&point=${latitude}%2C${longitude}`);
+  const alerts = (alertsResult?.features || []).map((feature) => ({
+    id: feature.id || "",
+    area: feature.properties?.areaDesc || "",
+    title: feature.properties?.headline || "",
+    severity: feature.properties?.severity || "",
+    certainty: feature.properties?.certainty || "",
+    urgency: feature.properties?.urgency || "",
+    event: feature.properties?.event || "",
+    effective: feature.properties?.effective || null,
+    expires: feature.properties?.expires || null,
+    description: feature.properties?.description || "",
+    instruction: feature.properties?.instruction || "",
+  }));
+
+  weatherAlertCache.set(key, {
+    data: alerts,
+    expiresAt: now + WEATHER_ALERT_CACHE_MS,
+  });
+  return alerts;
+}
+
+async function getWeatherData(point, requestedStationId) {
+  const now = Date.now();
+  const stationId = normalizeWeatherStation(requestedStationId);
+  const key = weatherDataKey(point, stationId);
+  const cached = weatherCache.get(key);
+  if (cached?.data && cached.expiresAt > now) {
+    const alerts = await getWeatherAlerts(point);
+    cached.data.alerts = alerts;
+    return cached.data;
+  }
+
+  const pointData = await getWeatherPointData(point);
+  const { latitude, longitude } = pointData;
+  const selectedStation = pointData.observationStations.find(
+    (station) => station.id === stationId,
+  );
+
+  const alerts = await getWeatherAlerts(point);
+  const forecast = await fetchWeatherGovJson(pointData.forecastUrl);
+
+  const periods = (forecast?.properties?.periods || [])
+    .slice(0, WEATHER_PERIOD_COUNT)
+    .map((period) => ({
+      name: period.name || "Now",
+      isDaytime: !!period.isDaytime,
+      temperature: period.temperature ?? null,
+      temperatureUnit: period.temperatureUnit || "F",
+      shortForecast: period.shortForecast || "",
+      windSpeed: period.windSpeed || "",
+      windDirection: period.windDirection || "",
+      probabilityOfPrecipitation:
+        period?.probabilityOfPrecipitation?.value ?? null,
+      startTime: period.startTime || null,
+      endTime: period.endTime || null,
+    }));
+  if (!periods.length) throw new Error("Forecast period missing");
+
+  const data = {
+    fetchedAt: new Date().toISOString(),
+    location: {
+      latitude,
+      longitude,
+      gridId: pointData.gridId,
+      gridX: pointData.gridX,
+      gridY: pointData.gridY,
+    },
+    observationStations: pointData.observationStations,
+    weatherStation: selectedStation?.id || "",
+    updatedAt:
+      forecast?.properties?.updateTime || forecast?.properties?.generatedAt || null,
+    alerts,
+    current: selectedStation ? await getCurrentWeather(selectedStation).catch(() => null)
+      : null,
+    periods,
+  };
+
+  weatherCache.set(key, {
+    data,
+    expiresAt: now + WEATHER_CACHE_MS,
+  });
+  return data;
 }
 
 setInterval(
@@ -62,6 +348,52 @@ setInterval(
 );
 
 app.get("/api/health", (_, res) => res.json({ ok: true, boards: boards.size }));
+
+app.get("/api/weather", async (req, res) => {
+  try {
+    const point = normalizeWeatherPoint(req.query.lat, req.query.lon);
+    if (!point) {
+      res.status(400).json({ ok: false, error: "Invalid weather coordinates" });
+      return;
+    }
+    if (req.query.refresh === "1") clearWeatherPointCaches(point);
+    const data = await getWeatherData(point, req.query.station);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Weather unavailable",
+    });
+  }
+});
+
+app.get("/api/weather/point", async (req, res) => {
+  try {
+    const point = normalizeWeatherPoint(req.query.lat, req.query.lon);
+    if (!point) {
+      res.status(400).json({ ok: false, error: "Invalid weather coordinates" });
+      return;
+    }
+    if (req.query.refresh === "1") clearWeatherPointCaches(point);
+    const pointData = await getWeatherPointData(point);
+    res.json({
+      ok: true,
+      location: {
+        latitude: pointData.latitude,
+        longitude: pointData.longitude,
+        gridId: pointData.gridId,
+        gridX: pointData.gridX,
+        gridY: pointData.gridY,
+      },
+      observationStations: pointData.observationStations,
+    });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Weather point unavailable",
+    });
+  }
+});
 
 wss.on("connection", (ws) => {
   ws.isAlive = true;
@@ -138,6 +470,8 @@ function handleMsg(ws, msg) {
         settings: null,
         messages: null,
         mode: "messages",
+        weatherPoint: DEFAULT_WEATHER_POINT,
+        weatherStation: "",
         locked: false, // true when companion is connected
         createdAt: Date.now(),
         lastActive: Date.now(),
@@ -328,6 +662,8 @@ function handleMsg(ws, msg) {
         settings: b.settings,
         messages: b.messages,
         mode: b.mode,
+        weatherPoint: b.weatherPoint,
+        weatherStation: b.weatherStation,
         locked: b.locked,
       });
       safeSend(b.companionWs, { type: "board_reconnected" });
@@ -355,8 +691,25 @@ function handleMsg(ws, msg) {
         b.settings = msg.settings;
       if (msg.type === "update_messages" && typeof msg.messages === "string")
         b.messages = msg.messages.slice(0, 10000);
-      if (msg.type === "set_mode" && typeof msg.mode === "string")
+      if (msg.type === "set_mode" && typeof msg.mode === "string") {
         b.mode = msg.mode;
+        if (msg.weatherPoint && typeof msg.weatherPoint === "object") {
+          const point = normalizeWeatherPoint(
+            msg.weatherPoint.latitude,
+            msg.weatherPoint.longitude,
+          );
+          if (point) {
+            b.weatherPoint = point;
+            msg.weatherPoint = point;
+          } else {
+            delete msg.weatherPoint;
+          }
+        }
+        if (typeof msg.weatherStation === "string") {
+          b.weatherStation = normalizeWeatherStation(msg.weatherStation);
+        }
+        msg.weatherStation = b.weatherStation;
+      }
       safeSend(b.boardWs, msg);
       break;
     }
@@ -391,6 +744,8 @@ function completePairing(b, companionWs, boardId) {
     settings: b.settings,
     messages: b.messages,
     mode: b.mode,
+    weatherPoint: b.weatherPoint,
+    weatherStation: b.weatherStation,
   });
   safeSend(b.boardWs, { type: "companion_joined" });
   console.log(`Paired: ${boardId} (locked)`);

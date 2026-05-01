@@ -572,6 +572,14 @@
         boardMode = "messages",
         companionConnected = false,
         clockInterval = null,
+        weatherInterval = null,
+        weatherFlipInterval = null,
+        weatherRequestId = 0,
+        lastWeatherData = null,
+        weatherPoint = { latitude: 35.3394, longitude: -97.3500 },
+        weatherStation = "",
+        weatherPointRefreshPending = false,
+        weatherPeriodIndex = 0,
         isLocked = false;
       let pendingApproval = false;
 
@@ -945,7 +953,7 @@
       }
 
       function playSequence() {
-        stopClock();
+        stopLiveModes();
         if (sequenceTimer) {
           clearTimeout(sequenceTimer);
           sequenceTimer = null;
@@ -972,14 +980,14 @@
         } else go(0);
       }
       function flipToNext() {
-        stopClock();
+        stopLiveModes();
         const msgs = parseMessages();
         if (!msgs.length) return;
         currentMsgIdx = (currentMsgIdx + 1) % msgs.length;
         flipToTarget(messageToGrid(msgs[currentMsgIdx]));
       }
       function resetBoard() {
-        stopClock();
+        stopLiveModes();
         if (sequenceTimer) {
           clearTimeout(sequenceTimer);
           sequenceTimer = null;
@@ -989,8 +997,253 @@
         currentMsgIdx = -1;
         flipToTarget(blankGrid());
       }
+      function clearClockTimer() {
+        if (clockInterval) {
+          clearInterval(clockInterval);
+          clockInterval = null;
+        }
+      }
+      function clearWeatherTimer() {
+        if (weatherInterval) {
+          clearInterval(weatherInterval);
+          weatherInterval = null;
+        }
+        if (weatherFlipInterval) {
+          clearInterval(weatherFlipInterval);
+          weatherFlipInterval = null;
+        }
+        weatherRequestId++;
+        weatherPeriodIndex = 0;
+      }
+      function updateWeatherFlipInterval() {
+        if (weatherFlipInterval) {
+          clearInterval(weatherFlipInterval);
+          weatherFlipInterval = null;
+        }
+        if (boardMode !== "weather") return;
+        weatherFlipInterval = setInterval(() => {
+          advanceWeatherPeriod();
+        }, Math.max(4000, S.msgDelay));
+      }
+      function stopClock() {
+        clearClockTimer();
+        if (boardMode === "clock") boardMode = "messages";
+      }
+      function stopWeather() {
+        clearWeatherTimer();
+        if (boardMode === "weather") boardMode = "messages";
+      }
+      function stopLiveModes() {
+        clearClockTimer();
+        clearWeatherTimer();
+        if (boardMode === "clock" || boardMode === "weather")
+          boardMode = "messages";
+      }
+      function centerLine(text) {
+        const line = Array.from((text || "").toUpperCase().trim()).slice(0, S.cols).join("");
+        return line
+          .padStart(Math.floor((S.cols + line.length) / 2))
+          .padEnd(S.cols);
+      }
+      function textToCenteredGrid(contentLines) {
+        const lines = Array(S.rows).fill("");
+        const visible = contentLines
+          .map((line) => (line || "").trim())
+          .filter(Boolean)
+          .slice(0, S.rows);
+        const start = Math.max(0, Math.floor((S.rows - visible.length) / 2));
+        visible.forEach((line, idx) => {
+          lines[start + idx] = centerLine(line);
+        });
+        return messageToGrid(lines.join("\n"));
+      }
+      function wrapWeatherText(text, maxLines) {
+        const clean = (text || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9/% .,-]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!clean) return [];
+        const words = clean.split(" ");
+        const lines = [];
+        let current = "";
+        words.forEach((word) => {
+          const next = current ? `${current} ${word}` : word;
+          if (next.length <= S.cols) {
+            current = next;
+            return;
+          }
+          if (current) lines.push(current);
+          current = word.length > S.cols ? word.slice(0, S.cols) : word;
+        });
+        if (current && lines.length < maxLines) lines.push(current);
+        if (lines.length > maxLines) return lines.slice(0, maxLines);
+        if (lines.length === maxLines && words.length) {
+          const last = lines[maxLines - 1];
+          if (last.length > S.cols) lines[maxLines - 1] = last.slice(0, S.cols);
+        }
+        return lines;
+      }
+      function formatWeatherWind(dir, speed) {
+        const raw = `${dir || ""} ${speed || ""}`
+          .toUpperCase()
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!raw) return "";
+        return raw.replace(/\s*MPH/g, "MPH");
+      }
+      function formatWeatherBearing(degrees) {
+        if (typeof degrees !== "number") return "";
+        const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        return dirs[Math.round(degrees / 45) % 8];
+      }
+      function formatWeatherTime(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        const h = d.getHours() % 12 || 12;
+        const m = String(d.getMinutes()).padStart(2, "0");
+        const ampm = d.getHours() >= 12 ? "PM" : "AM";
+        return `${h}:${m}${ampm}`;
+      }
+      function renderWeatherState(lines) {
+        flipToTarget(textToCenteredGrid(lines));
+      }
+      function weatherAlertHeader() {
+        if (S.cols >= 9) return "🟥 ALERT 🟥";
+        if (S.cols >= 7) return "🟥ALERT🟥";
+        return "ALERT";
+      }
+      function getWeatherSlides(data) {
+        const slides = [];
+        const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
+        const activeAlert = alerts.find(
+          (alert) => alert?.title || alert?.event,
+        );
+        if (activeAlert) {
+          slides.push({
+            type: "alert",
+            alert: activeAlert,
+          });
+        }
+        if (data?.current) {
+          slides.push({
+            type: "current",
+            current: data.current,
+          });
+        }
+        const periods = Array.isArray(data?.periods) ? data.periods : [];
+        periods.forEach((period) => {
+          slides.push({
+            type: "period",
+            period,
+          });
+        });
+        return slides;
+      }
+      function renderWeatherPeriod(data, index) {
+        lastWeatherData = data;
+        const slides = getWeatherSlides(data);
+        if (!slides.length) {
+          renderWeatherState(["WEATHER", "UNAVAILABLE"]);
+          return;
+        }
+        const safeIndex = ((index % slides.length) + slides.length) % slides.length;
+        weatherPeriodIndex = safeIndex;
+        const slide = slides[safeIndex];
+        if (slide?.type === "alert") {
+          const alert = slide.alert || {};
+          const severity = (alert.severity || "").toUpperCase();
+          const instruction = (alert.instruction || "").toUpperCase().split(";")[0].trim();
+          const updated = formatWeatherTime(alert.effective || alert.expires);
+          const lines = [
+            weatherAlertHeader(),
+            ...wrapWeatherText(
+              alert.title || alert.event || "WEATHER ALERT",
+              S.rows >= 5 ? 2 : 1,
+            ),
+            severity || "ACTIVE",
+          ];
+          if (S.rows >= 5 && instruction) lines.push(instruction);
+          else if (S.rows >= 4 && updated) lines.push(updated);
+          renderWeatherState(lines);
+          return;
+        }
+        if (slide?.type === "current") {
+          const current = slide.current || {};
+          const temp = current.temperature != null
+            ? `${current.temperature}${current.temperatureUnit || "F"}`
+            : "";
+          const condition = current.text || "CURRENT CONDITIONS";
+          const windDir = formatWeatherBearing(current.windDirection);
+          const wind = current.windSpeed != null
+            ? `${windDir ? `${windDir} ` : ""}${current.windSpeed}MPH`
+            : "";
+          const humidity = current.humidity != null ? `${current.humidity}% HUM` : "";
+          const updated = formatWeatherTime(current.timestamp);
+          const lines = [
+            current.stationName || current.station || "NOW",
+            ...wrapWeatherText(condition, S.rows >= 5 ? 2 : 1),
+            [temp, wind].filter(Boolean).join("  ") || "OBSERVATION",
+          ];
+          if (S.rows >= 5 && humidity) lines.push(humidity);
+          else if (S.rows >= 4 && updated) lines.push(updated);
+          renderWeatherState(lines);
+          return;
+        }
+        const period = slide?.period || {};
+        const precip = period.probabilityOfPrecipitation;
+        const stats = [
+          period.temperature != null
+            ? `${period.temperature}${period.temperatureUnit || "F"}`
+            : "",
+          precip != null ? `${precip}% RAIN` : "",
+        ]
+          .filter(Boolean)
+          .join("  ");
+        const wind = formatWeatherWind(period.windDirection, period.windSpeed);
+        const updated = formatWeatherTime(data?.updatedAt);
+        const lines = [
+          period.name || "WEATHER",
+          ...wrapWeatherText(
+            period.shortForecast || "NO FORECAST",
+            S.rows >= 5 ? 2 : 1,
+          ),
+          stats || wind || "FORECAST UNAVAILABLE",
+        ];
+        if (S.rows >= 5 && wind) lines.push(wind);
+        else if (S.rows >= 5 && updated) lines.push(`UPDATED ${updated}`);
+        else if (S.rows >= 4 && updated) lines.push(updated);
+        renderWeatherState(lines);
+      }
+      function advanceWeatherPeriod() {
+        const slides = getWeatherSlides(lastWeatherData);
+        if (slides.length < 2 || boardMode !== "weather") return;
+        renderWeatherPeriod(lastWeatherData, weatherPeriodIndex + 1);
+      }
+      async function fetchAndRenderWeather(requestId) {
+        try {
+          const params = new URLSearchParams({
+            lat: weatherPoint.latitude,
+            lon: weatherPoint.longitude,
+          });
+          if (weatherStation) params.set("station", weatherStation);
+          if (weatherPointRefreshPending) params.set("refresh", "1");
+          const res = await fetch(`/api/weather?${params}`, { cache: "no-store" });
+          if (!res.ok) throw new Error(`Weather ${res.status}`);
+          const data = await res.json();
+          if (requestId !== weatherRequestId || boardMode !== "weather") return;
+          if (!data?.ok) throw new Error(data?.error || "Weather unavailable");
+          weatherPointRefreshPending = false;
+          renderWeatherPeriod(data, 0);
+        } catch (_) {
+          if (requestId !== weatherRequestId || boardMode !== "weather") return;
+          lastWeatherData = null;
+          renderWeatherState(["WEATHER", "UNAVAILABLE"]);
+        }
+      }
       function startClock() {
-        stopClock();
+        stopLiveModes();
         boardMode = "clock";
         function tick() {
           const now = new Date(),
@@ -1051,15 +1304,43 @@
         tick();
         clockInterval = setInterval(tick, 1000);
       }
-      function stopClock() {
-        if (clockInterval) {
-          clearInterval(clockInterval);
-          clockInterval = null;
-        }
-        if (boardMode === "clock") boardMode = "messages";
+      function startWeather() {
+        stopLiveModes();
+        boardMode = "weather";
+        renderWeatherState(["WEATHER", "LOADING..."]);
+        const requestId = ++weatherRequestId;
+        fetchAndRenderWeather(requestId);
+        updateWeatherFlipInterval();
+        weatherInterval = setInterval(() => {
+          fetchAndRenderWeather(requestId);
+        }, 10 * 60 * 1000);
+      }
+      function setWeatherPoint(point, refresh) {
+        if (!point) return;
+        const latitude = Number(point.latitude);
+        const longitude = Number(point.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        const next = {
+          latitude: Number(latitude.toFixed(4)),
+          longitude: Number(longitude.toFixed(4)),
+        };
+        const changed =
+          next.latitude !== weatherPoint.latitude ||
+          next.longitude !== weatherPoint.longitude;
+        weatherPoint = next;
+        if (refresh && changed) weatherPointRefreshPending = true;
+      }
+      function setWeatherStation(station, refresh) {
+        const next =
+          typeof station === "string"
+            ? station.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12)
+            : "";
+        const changed = next !== weatherStation;
+        weatherStation = next;
+        if (refresh && changed) weatherPointRefreshPending = true;
       }
       function flipSystemMessage(text) {
-        stopClock();
+        stopLiveModes();
         if (sequenceTimer) {
           clearTimeout(sequenceTimer);
           sequenceTimer = null;
@@ -1165,6 +1446,8 @@
             currentMsgIdx = -1;
             renderBoard();
             dynamicCSS.textContent = buildDynamicCSS();
+            if (boardMode === "weather" && lastWeatherData)
+              renderWeatherPeriod(lastWeatherData, weatherPeriodIndex);
             if (S.autoFit) applyAutoFit();
             requestAnimationFrame(() => {
               boardWrapper.classList.remove("fading");
@@ -1338,7 +1621,11 @@
               if (msg.settings) Object.assign(S, msg.settings);
               if (msg.messages) messagesText = msg.messages;
               if (msg.mode) boardMode = msg.mode;
+              if (msg.weatherPoint) setWeatherPoint(msg.weatherPoint, false);
+              setWeatherStation(msg.weatherStation || "", false);
               applySettings(true);
+              if (boardMode === "clock") startClock();
+              else if (boardMode === "weather") startWeather();
               if (msg.locked) {
                 setCompanionState(true);
                 hidePairScreen();
@@ -1387,6 +1674,8 @@
               if (msg.settings && typeof msg.settings === "object") {
                 Object.assign(S, msg.settings);
                 applySettings();
+                if (Object.prototype.hasOwnProperty.call(msg.settings, "msgDelay"))
+                  updateWeatherFlipInterval();
               }
               break;
             case "update_messages":
@@ -1402,9 +1691,12 @@
               resetBoard();
               break;
             case "set_mode":
+              if (msg.weatherPoint) setWeatherPoint(msg.weatherPoint, true);
+              setWeatherStation(msg.weatherStation || "", true);
               if (msg.mode === "clock") startClock();
+              else if (msg.mode === "weather") startWeather();
               else {
-                stopClock();
+                stopLiveModes();
                 boardMode = "messages";
               }
               break;

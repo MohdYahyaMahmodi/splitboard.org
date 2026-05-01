@@ -559,6 +559,32 @@
         margin-top: 4px;
         line-height: 1.5;
       }
+      .weather-controls {
+        display: none;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+      .weather-controls.active {
+        display: block;
+      }
+      .weather-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .weather-status {
+        min-height: 15px;
+        margin-top: 8px;
+      }
+      .weather-station-row {
+        margin-top: 10px;
+      }
+      .weather-station-select {
+        width: 100%;
+        margin-top: 4px;
+      }
       .color-blocks {
         display: flex;
         gap: 6px;
@@ -784,12 +810,53 @@
           </div>
           <div class="sec-body">
             <div class="mode-bar" id="mode-bar">
-              <button class="active" onclick="setMode('messages')">
-                Messages</button
-              ><button onclick="setMode('clock')">Clock</button>
+              <button class="active" onclick="setMode('messages')">Messages</button>
+              <button onclick="setMode('clock')">Clock</button>
+              <button onclick="setMode('weather')">Weather</button>
             </div>
             <div class="hint" style="margin-top: 8px">
               Clock shows live time/date on the board.
+            </div>
+            <div class="hint" style="margin-top: 8px">
+              Weather shows live weather information on the board.
+            </div>
+            <div class="weather-controls" id="weather-controls">
+              <button class="btn btn-green" type="button" onclick="useCurrentLocation()">
+                Use Current Location
+              </button>
+              <div class="weather-grid">
+                <div>
+                  <div class="field-label">Latitude</div>
+                  <input
+                    class="text-input"
+                    id="weather-latitude"
+                    type="text"
+                    inputmode="decimal"
+                    value="35.3394"
+                  />
+                </div>
+                <div>
+                  <div class="field-label">Longitude</div>
+                  <input
+                    class="text-input"
+                    id="weather-longitude"
+                    type="text"
+                    inputmode="decimal"
+                    value="-97.3500"
+                  />
+                </div>
+              </div>
+              <div class="weather-station-row">
+                <div class="field-label">Observation Station</div>
+                <select
+                  class="text-input weather-station-select"
+                  id="weather-station"
+                  disabled
+                >
+                  <option value="">Use forecast only</option>
+                </select>
+              </div>
+              <div class="hint weather-status" id="weather-status"></div>
             </div>
           </div>
         </div>
@@ -1615,7 +1682,11 @@
         boardId = null,
         boardSecret = null,
         paired = false,
-        currentMode = "messages";
+        currentMode = "messages",
+        weatherPoint = { latitude: 35.3394, longitude: -97.35 },
+        weatherStation = "",
+        weatherStationRequestId = 0,
+        weatherLocationRequested = false;
 
       // ── Messages ──
       let messages = [
@@ -1753,19 +1824,152 @@
       function toggleSec(el) {
         el.parentElement.classList.toggle("open");
       }
+      function parseWeatherPointFromUI() {
+        const latitude = Number(document.getElementById("weather-latitude").value);
+        const longitude = Number(document.getElementById("weather-longitude").value);
+        if (
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude) ||
+          latitude < -90 ||
+          latitude > 90 ||
+          longitude < -180 ||
+          longitude > 180
+        ) {
+          return null;
+        }
+        return {
+          latitude: Number(latitude.toFixed(4)),
+          longitude: Number(longitude.toFixed(4)),
+        };
+      }
+      function syncWeatherPointUI() {
+        document.getElementById("weather-latitude").value =
+          weatherPoint.latitude.toFixed(4);
+        document.getElementById("weather-longitude").value =
+          weatherPoint.longitude.toFixed(4);
+      }
+      function renderWeatherStations(stations) {
+        const select = document.getElementById("weather-station");
+        const previous = weatherStation;
+        select.innerHTML = `<option value="">Use forecast only</option>`;
+        (Array.isArray(stations) ? stations : []).forEach((station) => {
+          if (!station?.id) return;
+          const option = document.createElement("option");
+          option.value = station.id;
+          const distance =
+            typeof station.distanceMiles === "number"
+              ? ` · ${station.distanceMiles} mi`
+              : "";
+          option.textContent = station.name
+            ? `${station.id} · ${station.name}${distance}`
+            : `${station.id}${distance}`;
+          select.appendChild(option);
+        });
+        const hasPrevious = Array.from(select.options).some(
+          (option) => option.value === previous,
+        );
+        weatherStation = hasPrevious
+          ? previous
+          : (select.options[1]?.value || "");
+        select.value = weatherStation;
+        select.disabled = select.options.length <= 1;
+      }
+      async function loadWeatherStations(sendAfterLoad) {
+        const point = parseWeatherPointFromUI();
+        if (!point) return;
+        const requestId = ++weatherStationRequestId;
+        const select = document.getElementById("weather-station");
+        select.disabled = true;
+        setWeatherStatus("Loading observation stations...");
+        try {
+          const params = new URLSearchParams({
+            lat: point.latitude,
+            lon: point.longitude,
+          });
+          const res = await fetch(`/api/weather/point?${params}`, {
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error(`Weather point ${res.status}`);
+          const data = await res.json();
+          if (requestId !== weatherStationRequestId) return;
+          if (!data?.ok) throw new Error(data?.error || "Stations unavailable");
+          renderWeatherStations(data.observationStations);
+          setWeatherStatus(weatherStation ? "Observation station selected." : "");
+          if (sendAfterLoad && currentMode === "weather") sendMode();
+        } catch (_) {
+          if (requestId !== weatherStationRequestId) return;
+          renderWeatherStations([]);
+          setWeatherStatus("Observation stations unavailable.");
+          if (sendAfterLoad && currentMode === "weather") sendMode();
+        }
+      }
+      function setWeatherStatus(text) {
+        document.getElementById("weather-status").textContent = text || "";
+      }
+      function sendMode() {
+        const payload = { type: "set_mode", mode: currentMode };
+        if (currentMode === "weather") {
+          const point = parseWeatherPointFromUI();
+          if (!point) {
+            setWeatherStatus("Enter valid latitude and longitude.");
+            return;
+          }
+          weatherPoint = point;
+          payload.weatherPoint = point;
+          payload.weatherStation = weatherStation;
+          setWeatherStatus("");
+        }
+        safeSend(payload);
+      }
+      function useCurrentLocation() {
+        if (!navigator.geolocation) {
+          setWeatherStatus("Location is not available in this browser.");
+          loadWeatherStations(currentMode === "weather");
+          return;
+        }
+        setWeatherStatus("Requesting location...");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            weatherPoint = {
+              latitude: Number(pos.coords.latitude.toFixed(4)),
+              longitude: Number(pos.coords.longitude.toFixed(4)),
+            };
+            syncWeatherPointUI();
+            setWeatherStatus("Location updated.");
+            loadWeatherStations(currentMode === "weather");
+          },
+          () => {
+            setWeatherStatus("Location permission unavailable. Enter coordinates.");
+            loadWeatherStations(currentMode === "weather");
+          },
+          { enableHighAccuracy: false, maximumAge: 10 * 60 * 1000, timeout: 10000 },
+        );
+      }
       function setMode(mode) {
         currentMode = mode;
         document
           .getElementById("mode-bar")
           .querySelectorAll("button")
           .forEach((b, i) =>
-            b.classList.toggle("active", ["messages", "clock"][i] === mode),
+            b.classList.toggle("active", ["messages", "clock", "weather"][i] === mode),
           );
         document.getElementById("sec-messages").style.display =
           mode === "messages" ? "" : "none";
         document.getElementById("bottom-bar").style.display =
           mode === "messages" ? "" : "none";
-        safeSend({ type: "set_mode", mode });
+        document
+          .getElementById("weather-controls")
+          .classList.toggle("active", mode === "weather");
+        if (mode === "weather") {
+          if (!weatherLocationRequested) {
+            weatherLocationRequested = true;
+            useCurrentLocation();
+          } else {
+            loadWeatherStations(true);
+          }
+        } else {
+          sendMode();
+        }
       }
 
       // ── Pairing ──
@@ -1904,7 +2108,11 @@
             if (msg.settings) Object.assign(S, msg.settings);
             if (msg.messages) deserializeMessages(msg.messages);
             if (msg.mode) currentMode = msg.mode;
+            if (msg.weatherPoint) weatherPoint = msg.weatherPoint;
+            if (typeof msg.weatherStation === "string")
+              weatherStation = msg.weatherStation;
             syncUI();
+            syncWeatherPointUI();
             setMode(currentMode);
             updateMiniBoard();
             document.getElementById("pair-screen").classList.add("hidden");
@@ -2144,6 +2352,7 @@
       document
         .querySelectorAll("input[type=range],input[type=color],select")
         .forEach((el) => {
+          if (el.id === "weather-station") return;
           const h = () => {
             readUI();
             updateLabels();
@@ -2162,10 +2371,28 @@
           }, 200);
         });
       });
+      document
+        .querySelectorAll("#weather-latitude,#weather-longitude")
+        .forEach((el) => {
+          el.addEventListener("input", () => {
+            clearTimeout(window._wd);
+            window._wd = setTimeout(() => {
+              loadWeatherStations(currentMode === "weather");
+            }, 350);
+          });
+          el.addEventListener("change", () => {
+            loadWeatherStations(currentMode === "weather");
+          });
+        });
+      document.getElementById("weather-station").addEventListener("change", (e) => {
+        weatherStation = e.target.value;
+        if (currentMode === "weather") sendMode();
+      });
 
       // ── Init ──
       renderColorBlocks();
       renderMessageCards();
+      syncWeatherPointUI();
       updateLabels();
       // Try QR auto-pair from hash, else show manual entry
       if (!checkQRHash()) codeInputs[0].focus();
